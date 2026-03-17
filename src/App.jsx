@@ -666,8 +666,35 @@ export default function App() {
     showNotification(`📱 אישור הגעה נשלח בוואטסאפ ל${patient.name}`);
   };
 
-  const generateReceipt = () => {
-    showNotification(`🧾 קבלה נוצרה ונשלחה ל${currentPatientForModal?.name}`);
+  const generateReceipt = async () => {
+    if (!receiptData.amount) return alert("נא להזין סכום");
+    showNotification("⏳ יוצר קבלה בחשבונית הירוקה...");
+    try {
+      const res = await fetch("/api/receipt", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          patientName: currentPatientForModal?.name,
+          amount: receiptData.amount,
+          paymentMethod: receiptData.method,
+          email: currentPatientForModal?.email || "",
+          description: receiptData.note || "טיפול קלינאות תקשורת",
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        // Mark patient as paid
+        setPatients(prev => prev.map(p =>
+          p.id === currentPatientForModal?.id ? { ...p, paid: true } : p
+        ));
+        showNotification(`✅ קבלה מס' ${data.receiptNumber} נוצרה ונשלחה בהצלחה!`);
+        if (data.receiptUrl) window.open(data.receiptUrl, "_blank");
+      } else {
+        showNotification(`❌ שגיאה: ${data.error}`);
+      }
+    } catch (err) {
+      showNotification("❌ שגיאה בחיבור לחשבונית הירוקה");
+    }
     closeModal();
   };
 
