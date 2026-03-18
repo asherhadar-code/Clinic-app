@@ -677,7 +677,7 @@ export default function App() {
           patientName: currentPatientForModal?.name,
           amount: receiptData.amount,
           paymentMethod: receiptData.method,
-          email: currentPatientForModal?.email || "",
+          email: receiptData.email || currentPatientForModal?.email || "",
           description: receiptData.note || "טיפול קלינאות תקשורת",
         }),
       });
@@ -751,6 +751,30 @@ export default function App() {
       {modal === "receipt" && (
         <Modal onClose={closeModal}>
           <h3>🧾 קבלה — {currentPatientForModal?.name}</h3>
+
+          {/* פרטי קשר */}
+          <div style={{background:"var(--cream)",borderRadius:12,padding:"12px 14px",marginBottom:8,fontSize:"0.85rem"}}>
+            <div style={{fontWeight:500,marginBottom:6,color:"var(--sage-dark)"}}>📋 פרטי הורה</div>
+            <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+              <div style={{flex:1}}>
+                <p className="field-label">טלפון</p>
+                <input className="field" placeholder="050-0000000"
+                  value={receiptData.phone ?? (currentPatientForModal?.phone || "")}
+                  onChange={e => setReceiptData({...receiptData, phone: e.target.value})} />
+              </div>
+              <div style={{flex:1}}>
+                <p className="field-label">מייל (לשליחת קבלה)</p>
+                <input className="field" type="email" placeholder="example@gmail.com"
+                  style={{direction:"ltr",textAlign:"right"}}
+                  value={receiptData.email ?? (currentPatientForModal?.email || "")}
+                  onChange={e => setReceiptData({...receiptData, email: e.target.value})} />
+              </div>
+            </div>
+            {!currentPatientForModal?.email && !receiptData.email && (
+              <p style={{fontSize:"0.75rem",color:"var(--terracotta)",marginTop:6}}>⚠️ אין מייל שמור — הקבלה לא תישלח אוטומטית</p>
+            )}
+          </div>
+
           <p className="field-label">סכום</p>
           <input className="field" type="number" placeholder="₪" value={receiptData.amount}
             onChange={e => setReceiptData({...receiptData, amount: e.target.value})} />
@@ -770,6 +794,9 @@ export default function App() {
               <div className="receipt-row"><span>שם מטופל:</span><span>{currentPatientForModal?.name}</span></div>
               <div className="receipt-row"><span>תאריך:</span><span>{new Date().toLocaleDateString("he-IL")}</span></div>
               <div className="receipt-row"><span>אמצעי תשלום:</span><span>{receiptData.method}</span></div>
+              {(receiptData.email || currentPatientForModal?.email) && (
+                <div className="receipt-row"><span>נשלח למייל:</span><span>{receiptData.email || currentPatientForModal?.email}</span></div>
+              )}
               {receiptData.note && <div className="receipt-row"><span>הערה:</span><span>{receiptData.note}</span></div>}
               <hr className="receipt-divider" />
               <div className="receipt-row receipt-total"><span>סה״כ:</span><span>₪{receiptData.amount}</span></div>
