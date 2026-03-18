@@ -711,7 +711,7 @@ export default function App() {
         p.id === currentPatientForModal?.id ? { ...p, paid: true } : p
       ));
       showNotification(`✅ קבלה מס' ${data.number} נוצרה בהצלחה!`);
-      if (data.url) window.open(data.url, "_blank");
+      if (data.url && typeof data.url === 'string') window.open(data.url, "_blank");
     } catch (err) {
       showNotification(`❌ שגיאה: ${err.message}`);
     }
