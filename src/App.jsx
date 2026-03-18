@@ -2,6 +2,71 @@ import { useState, useRef, useEffect } from "react";
 
 const ANTHROPIC_MODEL = "claude-sonnet-4-20250514";
 
+// ── Supabase client ────────────────────────────────────────────────
+const SUPABASE_URL  = import.meta.env.VITE_SUPABASE_URL || "";
+const SUPABASE_KEY  = import.meta.env.VITE_SUPABASE_ANON_KEY || "";
+
+const sb = {
+  async getPatients() {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/patients?select=*,sessions(*)&order=created_at.asc`, {
+      headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` }
+    });
+    const data = await res.json();
+    return data.map(p => ({
+      ...p,
+      history: (p.sessions || []).map(s => ({ date: s.date, summary: s.summary })),
+    }));
+  },
+  async addPatient(p) {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/patients`, {
+      method: "POST",
+      headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json", Prefer: "return=representation" },
+      body: JSON.stringify({ first_name: p.firstName, last_name: p.lastName, name: p.name, gender: p.gender, birth_date: p.birthDate, id_number: p.idNumber, diagnosis: p.diagnosis, phone: p.phone, email: p.email, parent_name: p.parentName, next_appt: p.nextAppt, sessions: 0, paid: true })
+    });
+    const data = await res.json();
+    return data[0];
+  },
+  async updatePatient(id, p) {
+    await fetch(`${SUPABASE_URL}/rest/v1/patients?id=eq.${id}`, {
+      method: "PATCH",
+      headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ first_name: p.firstName, last_name: p.lastName, name: p.name, gender: p.gender, birth_date: p.birthDate, id_number: p.idNumber, diagnosis: p.diagnosis, phone: p.phone, email: p.email, parent_name: p.parentName, next_appt: p.nextAppt, paid: p.paid })
+    });
+  },
+  async deletePatient(id) {
+    await fetch(`${SUPABASE_URL}/rest/v1/patients?id=eq.${id}`, {
+      method: "DELETE",
+      headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` }
+    });
+  },
+  async addSession(patientId, date, summary) {
+    await fetch(`${SUPABASE_URL}/rest/v1/sessions`, {
+      method: "POST",
+      headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ patient_id: patientId, date, summary })
+    });
+    // Update session count
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/sessions?patient_id=eq.${patientId}&select=id`, {
+      headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` }
+    });
+    const sessions = await res.json();
+    await fetch(`${SUPABASE_URL}/rest/v1/patients?id=eq.${patientId}`, {
+      method: "PATCH",
+      headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ sessions: sessions.length })
+    });
+  },
+  async markPaid(id, paid) {
+    await fetch(`${SUPABASE_URL}/rest/v1/patients?id=eq.${id}`, {
+      method: "PATCH",
+      headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ paid })
+    });
+  }
+};
+const GI_KEY    = import.meta.env.VITE_GI_KEY || "";
+const GI_SECRET = import.meta.env.VITE_GI_SECRET || "";
+
 // ── Palette & globals ──────────────────────────────────────────────
 const CSS = `
 @import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,300;0,400;0,600;1,300&family=DM+Sans:wght@300;400;500&display=swap');
@@ -536,58 +601,78 @@ async function askClaude(prompt) {
 // ══════════════════════════════════════════════════════════════════
 export default function App() {
   const [page, setPage] = useState("dashboard");
-  const [patients, setPatients] = useState(INITIAL_PATIENTS);
-  const [patientModal, setPatientModal] = useState(null); // null | "add" | "edit"
+  const [patients, setPatients] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [patientModal, setPatientModal] = useState(null);
   const [editingPatient, setEditingPatient] = useState(null);
 
-  const addPatient = (data) => {
-    const newP = {
-      id: Date.now(),
-      firstName: data.firstName,
-      lastName: data.lastName,
-      name: (data.firstName + " " + data.lastName).trim(),
-      gender: data.gender || "",
-      age: data.birthDate ? calcAge(data.birthDate).replace("גיל: ","") : "",
-      birthDate: data.birthDate || "",
-      idNumber: data.idNumber || "",
-      sessions: 0,
-      diagnosis: data.diagnosis,
-      nextAppt: data.nextAppt || "טרם נקבע",
-      paid: true,
-      phone: data.phone || "",
-      email: data.email || "",
-      parentName: data.parentName || "",
-      history: [],
-    };
-    setPatients(prev => [...prev, newP]);
-    showNotification("✅ המטופל " + data.name + " נוסף בהצלחה");
+  // Load patients from Supabase on startup
+  useEffect(() => {
+    sb.getPatients().then(data => {
+      setPatients(data);
+      setLoading(false);
+    }).catch(() => {
+      setPatients(INITIAL_PATIENTS);
+      setLoading(false);
+    });
+  }, []);
+
+  const addPatient = async (data) => {
+    try {
+      const newP = await sb.addPatient(data);
+      if (newP) {
+        const patient = {
+          ...newP,
+          firstName: newP.first_name,
+          lastName: newP.last_name,
+          birthDate: newP.birth_date,
+          idNumber: newP.id_number,
+          parentName: newP.parent_name,
+          nextAppt: newP.next_appt,
+          history: [],
+        };
+        setPatients(prev => [...prev, patient]);
+      }
+      showNotification("✅ " + data.firstName + " " + data.lastName + " נוסף בהצלחה");
+    } catch {
+      showNotification("❌ שגיאה בשמירת המטופל");
+    }
   };
 
-  const updatePatient = (id, data) => {
-    setPatients(prev => prev.map(p => p.id === id ? {
-      ...p,
-      firstName: data.firstName || p.firstName,
-      lastName: data.lastName || p.lastName,
-      name: ((data.firstName || p.firstName) + " " + (data.lastName || p.lastName)).trim(),
-      gender: data.gender || p.gender,
-      age: data.birthDate ? calcAge(data.birthDate).replace("גיל: ","") : p.age,
-      birthDate: data.birthDate || p.birthDate,
-      idNumber: data.idNumber || p.idNumber,
-      diagnosis: data.diagnosis,
-      nextAppt: data.nextAppt || p.nextAppt,
-      phone: data.phone || p.phone,
-      email: data.email || p.email,
-      parentName: data.parentName || p.parentName,
-    } : p));
-    showNotification("✏️ פרטי " + data.name + " עודכנו");
+  const updatePatient = async (id, data) => {
+    try {
+      await sb.updatePatient(id, data);
+      setPatients(prev => prev.map(p => p.id === id ? {
+        ...p,
+        firstName: data.firstName || p.firstName,
+        lastName: data.lastName || p.lastName,
+        name: ((data.firstName || p.firstName) + " " + (data.lastName || p.lastName)).trim(),
+        gender: data.gender || p.gender,
+        birthDate: data.birthDate || p.birthDate,
+        idNumber: data.idNumber || p.idNumber,
+        diagnosis: data.diagnosis,
+        nextAppt: data.nextAppt || p.nextAppt,
+        phone: data.phone || p.phone,
+        email: data.email || p.email,
+        parentName: data.parentName || p.parentName,
+      } : p));
+      showNotification("✏️ פרטי " + data.firstName + " עודכנו");
+    } catch {
+      showNotification("❌ שגיאה בעדכון המטופל");
+    }
   };
 
-  const deletePatient = (id) => {
-    const p = patients.find(x => x.id === id);
-    setPatients(prev => prev.filter(x => x.id !== id));
-    setSelectedPatient(null);
-    setPage("patients");
-    showNotification("🗑️ " + p.name + " הוסר מהמערכת");
+  const deletePatient = async (id) => {
+    try {
+      const p = patients.find(x => x.id === id);
+      await sb.deletePatient(id);
+      setPatients(prev => prev.filter(x => x.id !== id));
+      setSelectedPatient(null);
+      setPage("patients");
+      showNotification("🗑️ " + p.name + " הוסר מהמערכת");
+    } catch {
+      showNotification("❌ שגיאה במחיקת המטופל");
+    }
   };
   const [selectedPatient, setSelectedPatient] = useState(null);
   const [modal, setModal] = useState(null); // "post_session" | "pre_session" | "receipt" | "report"
@@ -654,11 +739,20 @@ export default function App() {
     setAiLoading(false);
   };
 
-  const saveSessionNote = () => {
+  const saveSessionNote = async () => {
     if (!sessionNote.trim()) return;
     const today = new Date().toLocaleDateString("he-IL");
-    currentPatientForModal.history.unshift({ date: today, summary: sessionNote });
-    showNotification(`✅ סיכום נשמר עבור ${currentPatientForModal.name}`);
+    try {
+      await sb.addSession(currentPatientForModal.id, today, sessionNote);
+      setPatients(prev => prev.map(p => p.id === currentPatientForModal.id ? {
+        ...p,
+        history: [{ date: today, summary: sessionNote }, ...(p.history || [])],
+        sessions: (p.sessions || 0) + 1,
+      } : p));
+      showNotification(`✅ סיכום נשמר עבור ${currentPatientForModal.name}`);
+    } catch {
+      showNotification("❌ שגיאה בשמירת הסיכום");
+    }
     closeModal();
   };
 
@@ -670,30 +764,47 @@ export default function App() {
     if (!receiptData.amount) return alert("נא להזין סכום");
     showNotification("⏳ יוצר קבלה בחשבונית הירוקה...");
     try {
-      const res = await fetch("/api/receipt", {
+      // Step 1: Get token
+      const authRes = await fetch("https://api.greeninvoice.co.il/api/v1/account/token", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: GI_KEY, secret: GI_SECRET }),
+      });
+      const authData = await authRes.json();
+      if (!authData.token) throw new Error("שגיאת התחברות לחשבונית הירוקה");
+
+      const paymentTypeMap = { "ביט": 4, "פייבוקס": 4, "העברה בנקאית": 3, "מזומן": 1 };
+      const email = receiptData.email || currentPatientForModal?.email || "";
+
+      // Step 2: Create receipt
+      const receiptRes = await fetch("https://api.greeninvoice.co.il/api/v1/documents", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${authData.token}`,
+        },
         body: JSON.stringify({
-          patientName: currentPatientForModal?.name,
-          amount: receiptData.amount,
-          paymentMethod: receiptData.method,
-          email: receiptData.email || currentPatientForModal?.email || "",
           description: receiptData.note || "טיפול קלינאות תקשורת",
+          type: 400,
+          lang: "he",
+          currency: "ILS",
+          vatType: 0,
+          signed: true,
+          sendByEmail: !!email,
+          client: { name: currentPatientForModal?.name, emails: email ? [email] : [], add: true },
+          income: [{ description: receiptData.note || "טיפול קלינאות תקשורת", quantity: 1, price: parseFloat(receiptData.amount), currency: "ILS", vatType: 0 }],
+          payment: [{ type: paymentTypeMap[receiptData.method] || 1, price: parseFloat(receiptData.amount), currency: "ILS", date: new Date().toISOString().split("T")[0] }],
         }),
       });
-      const data = await res.json();
-      if (data.success) {
-        // Mark patient as paid
-        setPatients(prev => prev.map(p =>
-          p.id === currentPatientForModal?.id ? { ...p, paid: true } : p
-        ));
-        showNotification(`✅ קבלה מס' ${data.receiptNumber} נוצרה ונשלחה בהצלחה!`);
-     
-      } else {
-        showNotification(`❌ שגיאה: ${data.error}`);
-      }
+      const data = await receiptRes.json();
+      if (data.errorMessage) throw new Error(data.errorMessage);
+
+      setPatients(prev => prev.map(p =>
+        p.id === currentPatientForModal?.id ? { ...p, paid: true } : p
+      ));
+      showNotification(`✅ קבלה מס' ${data.number} נוצרה ונשלחה למייל בהצלחה!`);
     } catch (err) {
-      showNotification("❌ שגיאה בחיבור לחשבונית הירוקה");
+      showNotification(`❌ שגיאה: ${err.message}`);
     }
     closeModal();
   };
@@ -704,6 +815,16 @@ export default function App() {
   };
 
   // ── Render ──
+  if (loading) return (
+    <>
+      <style>{CSS}</style>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"center",height:"100vh",background:"var(--cream)",flexDirection:"column",gap:16}}>
+        <div style={{fontFamily:"Fraunces, serif",fontSize:"2rem",color:"var(--sage-dark)"}}>קליניקה</div>
+        <AiLoading />
+      </div>
+    </>
+  );
+
   return (
     <>
       <style>{CSS}</style>
