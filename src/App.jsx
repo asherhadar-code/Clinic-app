@@ -710,8 +710,7 @@ export default function App() {
       setPatients(prev => prev.map(p =>
         p.id === currentPatientForModal?.id ? { ...p, paid: true } : p
       ));
-      showNotification(`✅ קבלה מס' ${data.number} נוצרה בהצלחה!`);
-      if (data.url && typeof data.url === 'string') window.open(data.url, "_blank");
+      showNotification(`✅ קבלה מס' ${data.number} נוצרה ונשלחה למייל בהצלחה!`);
     } catch (err) {
       showNotification(`❌ שגיאה: ${err.message}`);
     }
