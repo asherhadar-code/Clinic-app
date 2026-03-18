@@ -1,6 +1,8 @@
 import { useState, useRef, useEffect } from "react";
 
 const ANTHROPIC_MODEL = "claude-sonnet-4-20250514";
+const GI_KEY    = import.meta.env.VITE_GI_KEY || "";
+const GI_SECRET = import.meta.env.VITE_GI_SECRET || "";
 
 // ── Palette & globals ──────────────────────────────────────────────
 const CSS = `
@@ -670,9 +672,6 @@ export default function App() {
     if (!receiptData.amount) return alert("נא להזין סכום");
     showNotification("⏳ יוצר קבלה בחשבונית הירוקה...");
     try {
-      const GI_KEY    = import.meta.env.VITE_GI_KEY || "";
-      const GI_SECRET = import.meta.env.VITE_GI_SECRET || "";
-
       // Step 1: Get token
       const authRes = await fetch("https://api.greeninvoice.co.il/api/v1/account/token", {
         method: "POST",
