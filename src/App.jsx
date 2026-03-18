@@ -688,7 +688,7 @@ export default function App() {
           p.id === currentPatientForModal?.id ? { ...p, paid: true } : p
         ));
         showNotification(`✅ קבלה מס' ${data.receiptNumber} נוצרה ונשלחה בהצלחה!`);
-        if (data.receiptUrl) window.open(data.receiptUrl, "_blank");
+     
       } else {
         showNotification(`❌ שגיאה: ${data.error}`);
       }
