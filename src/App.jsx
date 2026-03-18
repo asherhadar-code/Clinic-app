@@ -670,30 +670,51 @@ export default function App() {
     if (!receiptData.amount) return alert("נא להזין סכום");
     showNotification("⏳ יוצר קבלה בחשבונית הירוקה...");
     try {
-      const res = await fetch("/api/receipt", {
+      const GI_KEY    = typeof import !== "undefined" && import.meta?.env?.VITE_GI_KEY || "";
+      const GI_SECRET = typeof import !== "undefined" && import.meta?.env?.VITE_GI_SECRET || "";
+
+      // Step 1: Get token
+      const authRes = await fetch("https://api.greeninvoice.co.il/api/v1/account/token", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: GI_KEY, secret: GI_SECRET }),
+      });
+      const authData = await authRes.json();
+      if (!authData.token) throw new Error("שגיאת התחברות לחשבונית הירוקה");
+
+      const paymentTypeMap = { "ביט": 4, "פייבוקס": 4, "העברה בנקאית": 3, "מזומן": 1 };
+      const email = receiptData.email || currentPatientForModal?.email || "";
+
+      // Step 2: Create receipt
+      const receiptRes = await fetch("https://api.greeninvoice.co.il/api/v1/documents", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${authData.token}`,
+        },
         body: JSON.stringify({
-          patientName: currentPatientForModal?.name,
-          amount: receiptData.amount,
-          paymentMethod: receiptData.method,
-          email: receiptData.email || currentPatientForModal?.email || "",
           description: receiptData.note || "טיפול קלינאות תקשורת",
+          type: 400,
+          lang: "he",
+          currency: "ILS",
+          vatType: 0,
+          signed: true,
+          sendByEmail: !!email,
+          client: { name: currentPatientForModal?.name, emails: email ? [email] : [], add: true },
+          income: [{ description: receiptData.note || "טיפול קלינאות תקשורת", quantity: 1, price: parseFloat(receiptData.amount), currency: "ILS", vatType: 0 }],
+          payment: [{ type: paymentTypeMap[receiptData.method] || 1, price: parseFloat(receiptData.amount), currency: "ILS", date: new Date().toISOString().split("T")[0] }],
         }),
       });
-      const data = await res.json();
-      if (data.success) {
-        // Mark patient as paid
-        setPatients(prev => prev.map(p =>
-          p.id === currentPatientForModal?.id ? { ...p, paid: true } : p
-        ));
-        showNotification(`✅ קבלה מס' ${data.receiptNumber} נוצרה ונשלחה בהצלחה!`);
-        if (data.receiptUrl) window.open(data.receiptUrl, "_blank");
-      } else {
-        showNotification(`❌ שגיאה: ${data.error}`);
-      }
+      const data = await receiptRes.json();
+      if (data.errorMessage) throw new Error(data.errorMessage);
+
+      setPatients(prev => prev.map(p =>
+        p.id === currentPatientForModal?.id ? { ...p, paid: true } : p
+      ));
+      showNotification(`✅ קבלה מס' ${data.number} נוצרה בהצלחה!`);
+      if (data.url) window.open(data.url, "_blank");
     } catch (err) {
-      showNotification("❌ שגיאה בחיבור לחשבונית הירוקה");
+      showNotification(`❌ שגיאה: ${err.message}`);
     }
     closeModal();
   };
