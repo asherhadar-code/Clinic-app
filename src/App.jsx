@@ -1126,7 +1126,7 @@ function Sidebar({ page, setPage }) {
       </div>
       {nav.map(n => (
         <div key={n.id} className={`nav-item ${page === n.id || (page==="patient_detail" && n.id==="patients") ? "active":""}`}
-          onClick={() => setPage(n.id)}>
+          onClick={() => { setPage(n.id); setSelectedPatient(null); }}>
           <span className="nav-icon">{n.icon}</span>{n.label}
         </div>
       ))}
