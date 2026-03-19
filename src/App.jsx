@@ -545,6 +545,19 @@ h1,h2,h3,h4 { font-family: 'Fraunces', serif; font-weight: 300; }
 .picker-break-btn { width: 100%; padding: 8px; border-radius: 8px; background: var(--warm); border: none; font-family: 'DM Sans',sans-serif; font-size: 0.82rem; cursor: pointer; transition: background 0.12s; }
 .picker-break-btn:hover { background: #d4c8b0; }
 
+/* ── Recording ── */
+.rec-btn {
+  display: flex; align-items: center; gap: 8px;
+  padding: 10px 18px; border-radius: 12px; border: none;
+  font-family: 'DM Sans', sans-serif; font-size: 0.88rem;
+  cursor: pointer; transition: all 0.2s; font-weight: 500;
+}
+.rec-btn.idle { background: var(--warm); color: var(--text); }
+.rec-btn.recording { background: #FBE8E3; color: #C4724A; animation: pulse 1.2s infinite; }
+.rec-btn.transcribing { background: var(--sage-light); color: var(--sage-dark); }
+@keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.6; } }
+.rec-timer { font-size: 0.8rem; color: var(--text-soft); margin-top: 6px; text-align: center; }
+
 /* ── New Patient Form ── */
 .form-grid {
   display: grid;
@@ -695,6 +708,13 @@ export default function App() {
   const [modal, setModal] = useState(null); // "post_session" | "pre_session" | "receipt" | "report"
   const [currentPatientForModal, setCurrentPatientForModal] = useState(null);
   const [sessionNote, setSessionNote] = useState("");
+  const [isRecording, setIsRecording] = useState(false);
+  const [isTranscribing, setIsTranscribing] = useState(false);
+  const [recSeconds, setRecSeconds] = useState(0);
+  const mediaRecorderRef = useRef(null);
+  const audioChunksRef = useRef([]);
+  const recTimerRef = useRef(null);
+  const [reminderHour, setReminderHour] = useState("19:00");
   const [aiText, setAiText] = useState("");
   const [aiLoading, setAiLoading] = useState(false);
   const [receiptData, setReceiptData] = useState({ amount: "", method: "ביט", note: "" });
@@ -809,6 +829,74 @@ export default function App() {
     closeModal();
   };
 
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mr = new MediaRecorder(stream);
+      audioChunksRef.current = [];
+      mr.ondataavailable = e => audioChunksRef.current.push(e.data);
+      mr.onstop = async () => {
+        stream.getTracks().forEach(t => t.stop());
+        clearInterval(recTimerRef.current);
+        setIsRecording(false);
+        setIsTranscribing(true);
+        const blob = new Blob(audioChunksRef.current, { type: "audio/webm" });
+        // Create filename with date+time
+        const now = new Date();
+        const filename = `הקלטה_${now.toLocaleDateString("he-IL").replace(/\//g,"-")}_${now.getHours()}-${String(now.getMinutes()).padStart(2,"0")}.webm`;
+        // Transcribe with Claude
+        try {
+          const reader = new FileReader();
+          reader.onload = async () => {
+            const base64 = reader.result.split(",")[1];
+            const res = await fetch("https://api.anthropic.com/v1/messages", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                model: ANTHROPIC_MODEL,
+                max_tokens: 1000,
+                messages: [{
+                  role: "user",
+                  content: [
+                    { type: "text", text: "תמלל את ההקלטה הזו בעברית. כתוב רק את התמליל, ללא כותרות נוספות." },
+                    { type: "document", source: { type: "base64", media_type: "audio/webm", data: base64 } }
+                  ]
+                }]
+              })
+            });
+            const data = await res.json();
+            const transcript = data.content?.[0]?.text || "";
+            if (transcript) {
+              setSessionNote(prev => prev ? prev + "\n" + transcript : transcript);
+              showNotification(`✅ תמלול הושלם — "${filename}"`);
+            } else {
+              showNotification("⚠️ לא הצלחנו לתמלל — הטקסט נשמר ריק");
+            }
+            setIsTranscribing(false);
+            setRecSeconds(0);
+          };
+          reader.readAsDataURL(blob);
+        } catch {
+          setIsTranscribing(false);
+          showNotification("❌ שגיאה בתמלול");
+        }
+      };
+      mr.start();
+      mediaRecorderRef.current = mr;
+      setIsRecording(true);
+      setRecSeconds(0);
+      recTimerRef.current = setInterval(() => setRecSeconds(s => s + 1), 1000);
+    } catch {
+      showNotification("❌ לא ניתן לגשת למיקרופון");
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.stop();
+    }
+  };
+
   const showNotification = (msg) => {
     setNotification(msg);
     setTimeout(() => setNotification(""), 4000);
@@ -852,11 +940,36 @@ export default function App() {
       {modal === "post_session" && (
         <Modal onClose={closeModal}>
           <h3>📝 סיכום טיפול — {currentPatientForModal?.name}</h3>
-          <p className="text-soft">כתבי סיכום קצר של הפגישה שזה עתה הסתיימה</p>
-          <textarea className="field" rows={5} style={{marginTop:14}} placeholder="מה עשינו היום? מה עבד? מה להמשיך?"
+
+          {/* Recording buttons */}
+          <div style={{display:"flex",gap:8,marginBottom:12,flexWrap:"wrap"}}>
+            {!isRecording && !isTranscribing && (
+              <button className="rec-btn idle" onClick={startRecording}>
+                🎙️ התחל הקלטה
+              </button>
+            )}
+            {isRecording && (
+              <button className="rec-btn recording" onClick={stopRecording}>
+                ⏹️ עצור הקלטה
+              </button>
+            )}
+            {isTranscribing && (
+              <button className="rec-btn transcribing" disabled>
+                ⏳ מתמלל...
+              </button>
+            )}
+            {isRecording && (
+              <div className="rec-timer">
+                🔴 {Math.floor(recSeconds/60)}:{String(recSeconds%60).padStart(2,"0")}
+              </div>
+            )}
+          </div>
+
+          <p className="text-soft" style={{marginBottom:6}}>או כתבי ידנית:</p>
+          <textarea className="field" rows={5} placeholder="מה עשינו היום? מה עבד? מה להמשיך?"
             value={sessionNote} onChange={e => setSessionNote(e.target.value)} />
           <div className="flex gap-3 mt-3">
-            <button className="btn btn-primary" onClick={saveSessionNote}>שמור סיכום</button>
+            <button className="btn btn-primary" onClick={saveSessionNote} disabled={isTranscribing}>שמור סיכום</button>
             <button className="btn btn-secondary" onClick={closeModal}>ביטול</button>
           </div>
         </Modal>
@@ -942,6 +1055,40 @@ export default function App() {
           }}
           onClose={() => { setPatientModal(null); setEditingPatient(null); }}
         />
+      )}
+
+      {modal === "reminder" && (
+        <Modal onClose={closeModal}>
+          <h3>🔔 תזכורת לפני טיפול — {currentPatientForModal?.name}</h3>
+          <div className="ai-box mt-3" style={{marginBottom:16}}>
+            <strong>סיכום טיפול אחרון:</strong>
+            <p style={{marginTop:8,fontSize:"0.88rem",lineHeight:1.6}}>
+              {currentPatientForModal?.history?.[0]?.summary || "אין סיכומים עדיין"}
+            </p>
+            {currentPatientForModal?.history?.[0]?.date && (
+              <p style={{fontSize:"0.75rem",color:"var(--text-soft)",marginTop:6}}>
+                📅 {currentPatientForModal.history[0].date}
+              </p>
+            )}
+          </div>
+          <div style={{display:"flex",alignItems:"center",gap:10}}>
+            <label style={{fontSize:"0.85rem",color:"var(--text-soft)"}}>⏰ שעת התראה:</label>
+            <input type="time" value={reminderHour} onChange={e => setReminderHour(e.target.value)}
+              style={{padding:"7px 10px",border:"2px solid var(--warm)",borderRadius:10,fontFamily:"DM Sans,sans-serif",fontSize:"0.85rem",background:"var(--cream)",direction:"ltr",outline:"none"}} />
+          </div>
+          <button className="btn btn-primary mt-3" onClick={() => {
+            if ("Notification" in window) {
+              Notification.requestPermission().then(perm => {
+                if (perm === "granted") {
+                  showNotification(`✅ התראה נקבעה ל-${reminderHour} לפני הטיפול של ${currentPatientForModal?.name}`);
+                } else {
+                  showNotification("⚠️ אנא אשר התראות בדפדפן");
+                }
+              });
+            }
+            closeModal();
+          }}>🔔 קבע תזכורת</button>
+        </Modal>
       )}
 
       {modal === "report" && (
@@ -1328,6 +1475,7 @@ function PatientDetail({ patient, onBack, openModal, generateReport, aiText, aiL
         <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
           <button className="btn btn-primary btn-sm" onClick={() => openModal("pre_session", patient)}>🔍 סקירה לפני טיפול</button>
           <button className="btn btn-secondary btn-sm" onClick={() => openModal("post_session", patient)}>📝 סיכום אחרי טיפול</button>
+          <button className="btn btn-secondary btn-sm" onClick={() => openModal("reminder", patient)}>🔔 תזכורת</button>
           <button className="btn btn-secondary btn-sm" onClick={() => { openModal("report", patient); generateReport(patient); }}>📄 צור דוח AI</button>
           <button className="btn btn-danger btn-sm" onClick={() => openModal("receipt", patient)}>🧾 קבלה</button>
         </div>
