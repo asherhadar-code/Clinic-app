@@ -30,7 +30,7 @@ const sb = {
       parentName: String(p.parent_name || ""),
       nextAppt: String(p.next_appt || "טרם נקבע"),
       sessions: typeof p.sessions === 'number' ? p.sessions : 0,
-      paid: p.paid ?? true,
+      paid: p.paid === true,
       history: (Array.isArray(p.sessions) ? p.sessions : [])
         .sort((a,b) => new Date(b.created_at) - new Date(a.created_at))
         .map(s => ({ date: String(s.date || ""), summary: String(s.summary || "") })),
@@ -40,7 +40,7 @@ const sb = {
     const res = await fetch(`${SUPABASE_URL}/rest/v1/patients`, {
       method: "POST",
       headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json", Prefer: "return=representation" },
-      body: JSON.stringify({ first_name: p.firstName, last_name: p.lastName, name: p.name, gender: p.gender, birth_date: p.birthDate, id_number: p.idNumber, diagnosis: p.diagnosis, phone: p.phone, email: p.email, parent_name: p.parentName, next_appt: p.nextAppt, sessions: 0, paid: true })
+      body: JSON.stringify({ first_name: p.firstName, last_name: p.lastName, name: p.name, gender: p.gender, birth_date: p.birthDate, id_number: p.idNumber, diagnosis: p.diagnosis, phone: p.phone, email: p.email, parent_name: p.parentName, next_appt: p.nextAppt, sessions: 0, paid: false })
     });
     const data = await res.json();
     return data[0];
