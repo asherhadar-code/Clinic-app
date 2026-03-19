@@ -576,6 +576,35 @@ h1,h2,h3,h4 { font-family: 'Fraunces', serif; font-weight: 300; }
 .picker-break-btn { width: 100%; padding: 8px; border-radius: 8px; background: var(--warm); border: none; font-family: 'DM Sans',sans-serif; font-size: 0.82rem; cursor: pointer; transition: background 0.12s; }
 .picker-break-btn:hover { background: #d4c8b0; }
 
+/* ── AI Chat ── */
+.ai-chat-box {
+  display: flex; flex-direction: column; gap: 10px;
+  max-height: 380px; overflow-y: auto; padding: 4px;
+}
+.ai-chat-msg {
+  padding: 12px 14px; border-radius: 14px;
+  font-size: 0.85rem; line-height: 1.6; max-width: 90%;
+}
+.ai-chat-msg.user {
+  background: var(--sage-dark); color: white;
+  align-self: flex-end; border-radius: 14px 14px 4px 14px;
+}
+.ai-chat-msg.assistant {
+  background: var(--cream); border: 1px solid var(--warm);
+  align-self: flex-start; border-radius: 14px 14px 14px 4px;
+  white-space: pre-wrap;
+}
+.ai-quick-btns {
+  display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px;
+}
+.ai-quick-btn {
+  padding: 5px 12px; border-radius: 20px; border: 1.5px solid var(--sage);
+  background: white; color: var(--sage-dark); font-size: 0.75rem;
+  cursor: pointer; font-family: 'DM Sans', sans-serif;
+  transition: all 0.15s;
+}
+.ai-quick-btn:hover { background: var(--sage-light); }
+
 /* ── Recording ── */
 .rec-btn {
   display: flex; align-items: center; gap: 8px;
@@ -771,6 +800,10 @@ export default function App() {
   const [reminderHour, setReminderHour] = useState("19:00");
   const [aiText, setAiText] = useState("");
   const [aiLoading, setAiLoading] = useState(false);
+  const [aiChatMessages, setAiChatMessages] = useState([]);
+  const [aiChatInput, setAiChatInput] = useState("");
+  const [aiChatLoading, setAiChatLoading] = useState(false);
+  const [aiChatPatient, setAiChatPatient] = useState(null);
   const [receiptData, setReceiptData] = useState({ amount: "", method: "ביט", note: "" });
   const [notification, setNotification] = useState("");
   const [documents, setDocuments] = useState({
@@ -937,6 +970,55 @@ export default function App() {
     }
   };
 
+  const openAiChat = (patient) => {
+    setAiChatPatient(patient);
+    setAiChatMessages([{
+      role: "assistant",
+      text: `שלום! אני יודע הכל על ${patient.firstName || patient.name}. במה אוכל לעזור? 😊`
+    }]);
+    setAiChatInput("");
+    setModal("ai_chat");
+  };
+
+  const sendAiChat = async (customMsg) => {
+    const msg = customMsg || aiChatInput.trim();
+    if (!msg || aiChatLoading) return;
+    setAiChatInput("");
+    const newMessages = [...aiChatMessages, { role: "user", text: msg }];
+    setAiChatMessages(newMessages);
+    setAiChatLoading(true);
+    const patient = aiChatPatient;
+    const history = (patient.history || []).map(h => `${h.date}: ${h.summary}`).join("\n");
+    const systemPrompt = `את עוזרת AI חכמה לקלינאית תקשורת. להלן פרטי המטופל:
+שם: ${patient.name}
+גיל: ${patient.age}
+אבחנה: ${patient.diagnosis}
+מספר פגישות: ${patient.sessions}
+היסטוריית טיפולים:
+${history || "אין עדיין סיכומי טיפולים"}
+
+ענה בעברית בסגנון מקצועי וחם. אם מתבקש דוח — כתוב בסגנון קלינאית תקשורת מנוסה.`;
+    try {
+      const res = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: ANTHROPIC_MODEL,
+          max_tokens: 1500,
+          system: systemPrompt,
+          messages: newMessages.filter(m => m.role !== "assistant" || m !== newMessages[0])
+            .map(m => ({ role: m.role === "user" ? "user" : "assistant", content: m.text }))
+        })
+      });
+      const data = await res.json();
+      const reply = data.content?.[0]?.text || "מצטער, לא הצלחתי לענות";
+      setAiChatMessages(prev => [...prev, { role: "assistant", text: reply }]);
+    } catch {
+      setAiChatMessages(prev => [...prev, { role: "assistant", text: "שגיאה בחיבור ל-AI" }]);
+    }
+    setAiChatLoading(false);
+  };
+
   const showNotification = (msg) => {
     setNotification(msg);
     setTimeout(() => setNotification(""), 4000);
@@ -973,7 +1055,7 @@ export default function App() {
               onAdd={() => setPatientModal("add")} />}
           {page === "patient_detail" && selectedPatient &&
             <PatientDetail patient={selectedPatient} onBack={() => { setSelectedPatient(null); setPage("patients"); }}
-              openModal={openModal} generateReport={generateReport} aiText={aiText} aiLoading={aiLoading}
+              openModal={openModal} generateReport={generateReport} aiText={aiText} aiLoading={aiLoading} openAiChat={openAiChat}
               documents={documents[selectedPatient.id] || []} addDocument={addDocument} removeDocument={removeDocument}
               onEdit={() => { setEditingPatient(selectedPatient); setPatientModal("edit"); }}
               onDelete={() => deletePatient(selectedPatient.id)} />}
@@ -1146,6 +1228,46 @@ export default function App() {
               showNotification("📋 הדוח הועתק ללוח");
             }}>העתק דוח</button>
           )}
+        </Modal>
+      )}
+
+      {modal === "ai_chat" && aiChatPatient && (
+        <Modal onClose={closeModal}>
+          <h3>🤖 עוזר AI — {aiChatPatient.firstName || aiChatPatient.name}</h3>
+
+          {/* Quick action buttons */}
+          <div className="ai-quick-btns">
+            {[
+              "סכם את כל הטיפולים",
+              "מה ההתקדמות?",
+              "כתוב דוח רשמי",
+              "המלצות לטיפול הבא",
+              "דפוסים חוזרים",
+              "נקודות לחיזוק"
+            ].map(q => (
+              <button key={q} className="ai-quick-btn" onClick={() => sendAiChat(q)}>{q}</button>
+            ))}
+          </div>
+
+          {/* Chat messages */}
+          <div className="ai-chat-box" id="chatBox">
+            {aiChatMessages.map((m, i) => (
+              <div key={i} className={`ai-chat-msg ${m.role}`}>{m.text}</div>
+            ))}
+            {aiChatLoading && (
+              <div className="ai-chat-msg assistant">
+                <div className="ai-loading"><div className="dot"/><div className="dot"/><div className="dot"/></div>
+              </div>
+            )}
+          </div>
+
+          {/* Input */}
+          <div className="flex gap-3 mt-3">
+            <input className="field" style={{flex:1}} placeholder="שאל כל שאלה על המטופל..."
+              value={aiChatInput} onChange={e => setAiChatInput(e.target.value)}
+              onKeyDown={e => e.key === "Enter" && sendAiChat()} />
+            <button className="btn btn-primary" onClick={() => sendAiChat()} disabled={aiChatLoading}>שלח</button>
+          </div>
         </Modal>
       )}
     </>
@@ -1556,7 +1678,7 @@ function UploadZone({ patientId, addDocument }) {
 }
 
 // ── Patient Detail ─────────────────────────────────────────────────
-function PatientDetail({ patient, onBack, openModal, generateReport, aiText, aiLoading, documents, addDocument, removeDocument, onEdit, onDelete }) {
+function PatientDetail({ patient, onBack, openModal, generateReport, aiText, aiLoading, openAiChat, documents, addDocument, removeDocument, onEdit, onDelete }) {
   const [tab, setTab] = useState("history");
 
   const docIcon = (type) => type === "report" ? "📄" : type === "summary" ? "📝" : "📎";
@@ -1579,7 +1701,7 @@ function PatientDetail({ patient, onBack, openModal, generateReport, aiText, aiL
           <button className="btn btn-primary btn-sm" onClick={() => openModal("pre_session", patient)}>🔍 סקירה לפני טיפול</button>
           <button className="btn btn-secondary btn-sm" onClick={() => openModal("post_session", patient)}>📝 סיכום אחרי טיפול</button>
           <button className="btn btn-secondary btn-sm" onClick={() => openModal("reminder", patient)}>🔔 תזכורת</button>
-          <button className="btn btn-secondary btn-sm" onClick={() => { openModal("report", patient); generateReport(patient); }}>📄 צור דוח AI</button>
+          <button className="btn btn-secondary btn-sm" onClick={() => openAiChat(patient)}>🤖 עוזר AI</button>
           <button className="btn btn-danger btn-sm" onClick={() => openModal("receipt", patient)}>🧾 קבלה</button>
         </div>
         <div style={{display:"flex",gap:8}}>
