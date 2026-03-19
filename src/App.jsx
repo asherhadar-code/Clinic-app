@@ -81,6 +81,37 @@ const sb = {
       headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json" },
       body: JSON.stringify({ paid })
     });
+  },
+  async getAppointments() {
+    if (!SUPABASE_URL || !SUPABASE_KEY) return [];
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/appointments?select=*&order=day_index.asc,start_time.asc`, {
+      headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` }
+    });
+    if (!res.ok) return [];
+    const data = await res.json();
+    return Array.isArray(data) ? data : [];
+  },
+  async addAppointment(apt) {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/appointments`, {
+      method: "POST",
+      headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json", Prefer: "return=representation" },
+      body: JSON.stringify({ patient_id: apt.patientId, patient_name: apt.patientName, day_index: apt.dayIndex, start_time: apt.startTime, status: "pending" })
+    });
+    const data = await res.json();
+    return Array.isArray(data) ? data[0] : data;
+  },
+  async deleteAppointment(id) {
+    await fetch(`${SUPABASE_URL}/rest/v1/appointments?id=eq.${id}`, {
+      method: "DELETE",
+      headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` }
+    });
+  },
+  async updateAppointmentStatus(id, status) {
+    await fetch(`${SUPABASE_URL}/rest/v1/appointments?id=eq.${id}`, {
+      method: "PATCH",
+      headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ status })
+    });
   }
 };
 const GI_KEY    = import.meta.env.VITE_GI_KEY || "";
@@ -642,19 +673,22 @@ export default function App() {
   const [page, setPage] = useState("dashboard");
   const [patients, setPatients] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [appointments, setAppointments] = useState([]);
   const [patientModal, setPatientModal] = useState(null);
   const [editingPatient, setEditingPatient] = useState(null);
 
-  // Load patients from Supabase on startup
+  // Load patients and appointments from Supabase on startup
   useEffect(() => {
-    sb.getPatients()
-      .then(data => {
-        setPatients(Array.isArray(data) ? data : []);
+    Promise.all([sb.getPatients(), sb.getAppointments()])
+      .then(([pData, aData]) => {
+        setPatients(Array.isArray(pData) ? pData : []);
+        setAppointments(Array.isArray(aData) ? aData : []);
         setLoading(false);
       })
       .catch(err => {
         console.error("Supabase error:", err);
         setPatients([]);
+        setAppointments([]);
         setLoading(false);
       });
   }, []);
@@ -932,8 +966,8 @@ export default function App() {
         <main className="main">
           {notification && <div className="banner">🔔 {notification}</div>}
 
-          {page === "dashboard" && <Dashboard patients={patients} openModal={openModal} sendWhatsApp={sendWhatsApp} />}
-          {page === "calendar" && <Calendar patients={patients} openModal={openModal} sendWhatsApp={sendWhatsApp} />}
+          {page === "dashboard" && <Dashboard patients={patients} appointments={appointments} openModal={openModal} sendWhatsApp={sendWhatsApp} />}
+          {page === "calendar" && <Calendar patients={patients} appointments={appointments} setAppointments={setAppointments} openModal={openModal} sendWhatsApp={sendWhatsApp} />}
           {page === "patients" && !selectedPatient &&
             <PatientList patients={patients} onSelect={p => { setSelectedPatient(p); setPage("patient_detail"); }}
               onAdd={() => setPatientModal("add")} />}
@@ -1143,28 +1177,61 @@ function Sidebar({ page, setPage }) {
 }
 
 // ── Dashboard ──────────────────────────────────────────────────────
-function Dashboard({ patients, openModal, sendWhatsApp }) {
-  const todayPatients = WEEK_APTS[1]; // Tuesday
+function Dashboard({ patients, appointments, openModal, sendWhatsApp }) {
+  // Get today's day index (0=Sunday...6=Saturday)
+  const todayIdx = new Date().getDay();
+  const tomorrowIdx = (todayIdx + 1) % 7;
+
+  // Today's and tomorrow's appointments from real data
+  const todayApts = appointments.filter(a => a.day_index === todayIdx).sort((a,b) => a.start_time > b.start_time ? 1 : -1);
+  const tomorrowApts = appointments.filter(a => a.day_index === tomorrowIdx).sort((a,b) => a.start_time > b.start_time ? 1 : -1);
+  const unpaid = patients.filter(p => p && !p.paid);
+  const totalWeekApts = appointments.length;
+
   return (
     <>
       <h1 className="page-title">שלום! 👋</h1>
       <div className="stats-grid">
-        <div className="stat-card"><div className="stat-num">30</div><div className="stat-label">מטופלים השבוע</div></div>
-        <div className="stat-card"><div className="stat-num">4</div><div className="stat-label">טיפולים היום</div></div>
-        <div className="stat-card"><div className="stat-num">₪2,400</div><div className="stat-label">הכנסה השבוע</div></div>
-        <div className="stat-card"><div className="stat-num">3</div><div className="stat-label">ממתינים לתשלום</div></div>
+        <div className="stat-card"><div className="stat-num">{patients.length}</div><div className="stat-label">סה"כ מטופלים</div></div>
+        <div className="stat-card"><div className="stat-num">{todayApts.length}</div><div className="stat-label">טיפולים היום</div></div>
+        <div className="stat-card"><div className="stat-num">{totalWeekApts}</div><div className="stat-label">טיפולים השבוע</div></div>
+        <div className="stat-card"><div className="stat-num" style={{color: unpaid.length > 0 ? "var(--terracotta)" : "var(--sage-dark)"}}>{unpaid.length}</div><div className="stat-label">ממתינים לתשלום</div></div>
       </div>
 
       <div className="card">
-        <div className="card-title">📅 טיפולים מחר</div>
-        {todayPatients.map((a, i) => {
-          const patient = patients.find(p => p.name === a.name);
+        <div className="card-title">📅 טיפולים היום ({todayApts.length})</div>
+        {todayApts.length === 0 && <p className="text-soft" style={{padding:"8px 0"}}>אין טיפולים היום</p>}
+        {todayApts.map((a, i) => {
+          const patient = patients.find(p => p.id === a.patient_id || p.name === a.patient_name);
           return (
             <div key={i} className="patient-row">
-              <div className="patient-avatar">{a.name[0]}</div>
+              <div className="patient-avatar">{(a.patient_name||"?")[0]}</div>
               <div className="patient-info">
-                <div className="patient-name">{a.name}</div>
-                <div className="patient-meta">🕐 {a.time}</div>
+                <div className="patient-name">{a.patient_name}</div>
+                <div className="patient-meta">🕐 {a.start_time}</div>
+              </div>
+              <div style={{fontSize:"0.72rem",padding:"3px 8px",borderRadius:20,
+                background: a.status==="confirmed" ? "#E8F5E8" : "#FFF8E1",
+                color: a.status==="confirmed" ? "#2E7D32" : "#F57F17"}}>
+                {a.status==="confirmed" ? "✅ אישר" : "⏳ ממתין"}
+              </div>
+              <button className="btn btn-sm btn-secondary" onClick={() => patient && openModal("pre_session", patient)}>סקירה</button>
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="card">
+        <div className="card-title">📅 טיפולים מחר ({tomorrowApts.length})</div>
+        {tomorrowApts.length === 0 && <p className="text-soft" style={{padding:"8px 0"}}>אין טיפולים מחר</p>}
+        {tomorrowApts.map((a, i) => {
+          const patient = patients.find(p => p.id === a.patient_id || p.name === a.patient_name);
+          return (
+            <div key={i} className="patient-row">
+              <div className="patient-avatar">{(a.patient_name||"?")[0]}</div>
+              <div className="patient-info">
+                <div className="patient-name">{a.patient_name}</div>
+                <div className="patient-meta">🕐 {a.start_time}</div>
               </div>
               <button className="btn btn-sm btn-secondary" onClick={() => patient && openModal("pre_session", patient)}>סקירה לפני</button>
               <button className="btn btn-sm btn-primary" onClick={() => patient && sendWhatsApp(patient)}>📱 שלח אישור</button>
@@ -1174,8 +1241,9 @@ function Dashboard({ patients, openModal, sendWhatsApp }) {
       </div>
 
       <div className="card">
-        <div className="card-title">⏰ לא שילמו</div>
-        {patients.filter(p => p && !p.paid).map(p => (
+        <div className="card-title">⏰ טרם שולמו ({unpaid.length})</div>
+        {unpaid.length === 0 && <p className="text-soft" style={{padding:"8px 0"}}>✅ כל המטופלים שילמו</p>}
+        {unpaid.map(p => (
           <div key={p.id} className="patient-row">
             <div className="patient-avatar">{(p.name||"?")[0]}</div>
             <div className="patient-info">
@@ -1194,26 +1262,34 @@ function Dashboard({ patients, openModal, sendWhatsApp }) {
 // Each day has an ordered list of "blocks": { type:"treatment"|"break", minutes, patientId?, patientName?, status? }
 // The schedule is built by walking blocks sequentially from dayStart.
 
-function Calendar({ patients, openModal, sendWhatsApp }) {
+function Calendar({ patients, appointments, setAppointments, openModal, sendWhatsApp }) {
   const [dayStart, setDayStart] = useState("08:30");
   const [dayEnd,   setDayEnd]   = useState("14:30");
 
-  // dayBlocks: { [dayIdx]: [ {id, type, minutes, patientId?, patientName?, status} ] }
+  // dayBlocks built from Supabase appointments
   const makeId = () => Math.random().toString(36).slice(2,8);
-  const [dayBlocks, setDayBlocks] = useState({
-    0: [
-      { id:makeId(), type:"treatment", minutes:45, patientId:1, patientName:"יוסי כהן", status:"confirmed" },
-      { id:makeId(), type:"treatment", minutes:45, patientId:2, patientName:"מיה לוי",  status:"pending"   },
-    ],
-    1: [
-      { id:makeId(), type:"treatment", minutes:45, patientId:3, patientName:"דניאל ברק",status:"confirmed" },
-      { id:makeId(), type:"break",     minutes:15 },
-      { id:makeId(), type:"treatment", minutes:45, patientId:4, patientName:"נועה שמיר",status:"confirmed" },
-    ],
-    2: [
-      { id:makeId(), type:"treatment", minutes:45, patientId:5, patientName:"עמיר גל",  status:"confirmed" },
-    ],
-  });
+  const [localBreaks, setLocalBreaks] = useState({});
+
+  // Build dayBlocks from appointments + localBreaks
+  const buildDayBlocks = () => {
+    const blocks = {};
+    (appointments || []).forEach(a => {
+      const di = a.day_index;
+      if (!blocks[di]) blocks[di] = [];
+      blocks[di].push({ id: a.id, type: "treatment", minutes: 45, patientId: a.patient_id, patientName: a.patient_name, status: a.status || "pending" });
+    });
+    // Add local breaks
+    Object.entries(localBreaks).forEach(([di, bArr]) => {
+      if (!blocks[di]) blocks[di] = [];
+      bArr.forEach(b => blocks[di].push(b));
+    });
+    // Sort by start time
+    Object.keys(blocks).forEach(di => {
+      blocks[di].sort((a,b) => (a.startTime||"") > (b.startTime||"") ? 1 : -1);
+    });
+    return blocks;
+  };
+  const dayBlocks = buildDayBlocks();
 
   // Modal state: adding a new block to a day
   const [addModal, setAddModal] = useState(null); // { dayIdx, insertAfterIdx }
@@ -1237,32 +1313,44 @@ function Calendar({ patients, openModal, sendWhatsApp }) {
   };
 
   const addBlock = (dayIdx, insertAfterIdx) => {
-    const block = addType === "break"
-      ? { id: makeId(), type: "break", minutes: breakMins }
-      : null; // patient chosen separately
-    if (addType === "break" && block) {
-      setDayBlocks(prev => {
-        const arr = [...(prev[dayIdx] || [])];
-        arr.splice(insertAfterIdx + 1, 0, block);
-        return { ...prev, [dayIdx]: arr };
-      });
+    if (addType === "break") {
+      const block = { id: makeId(), type: "break", minutes: breakMins };
+      setLocalBreaks(prev => ({
+        ...prev,
+        [dayIdx]: [...(prev[dayIdx] || []), block]
+      }));
       setAddModal(null);
     }
   };
 
-  const assignPatientToModal = (patient) => {
-    const block = { id: makeId(), type: "treatment", minutes: 45, patientId: patient.id, patientName: patient.name, status: "pending" };
-    setDayBlocks(prev => {
-      const arr = [...(prev[addModal.dayIdx] || [])];
-      arr.splice(addModal.insertAfterIdx + 1, 0, block);
-      return { ...prev, [addModal.dayIdx]: arr };
-    });
+  const assignPatientToModal = async (patient) => {
+    try {
+      const newApt = await sb.addAppointment({
+        patientId: patient.id,
+        patientName: patient.name,
+        dayIndex: addModal.dayIdx,
+        startTime: "00:00", // will be calculated from position
+      });
+      if (newApt && newApt.id) {
+        setAppointments(prev => [...prev, { ...newApt, day_index: addModal.dayIdx, patient_name: patient.name, patient_id: patient.id, status: "pending" }]);
+      }
+    } catch(e) {
+      console.error("Error adding appointment:", e);
+    }
     setAddModal(null);
     setPatientQ("");
   };
 
-  const removeBlock = (dayIdx, blockId) => {
-    setDayBlocks(prev => ({ ...prev, [dayIdx]: (prev[dayIdx]||[]).filter(b => b.id !== blockId) }));
+  const removeBlock = async (dayIdx, blockId) => {
+    // Check if it's a local break or a real appointment
+    if (typeof blockId === 'string' && blockId.length < 10) {
+      // Local break
+      setLocalBreaks(prev => ({ ...prev, [dayIdx]: (prev[dayIdx]||[]).filter(b => b.id !== blockId) }));
+    } else {
+      // Real appointment in Supabase
+      try { await sb.deleteAppointment(blockId); } catch(e) {}
+      setAppointments(prev => prev.filter(a => a.id !== blockId));
+    }
   };
 
   const filteredPatients = patients.filter(p =>
