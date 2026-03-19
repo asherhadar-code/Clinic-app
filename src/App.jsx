@@ -1502,19 +1502,59 @@ function PatientDetail({ patient, onBack, openModal, generateReport, aiText, aiL
         <div className={`tab ${tab==="info"?"active":""}`} onClick={() => setTab("info")}>מידע כללי</div>
       </div>
 
-      {tab === "history" && (
-        <div className="session-list">
-          {(patient.history || []).length === 0 && (
-            <p className="text-soft" style={{textAlign:"center",padding:20}}>אין סיכומי טיפולים עדיין</p>
-          )}
-          {(patient.history || []).map((s, i) => (
-            <div key={i} className="session-item">
-              <div className="session-date">📅 {s.date}</div>
-              <div className="session-summary">{s.summary}</div>
-            </div>
-          ))}
-        </div>
-      )}
+      {tab === "history" && (() => {
+        const history = patient.history || [];
+        if (history.length === 0) return (
+          <p className="text-soft" style={{textAlign:"center",padding:20}}>אין סיכומי טיפולים עדיין</p>
+        );
+
+        const latest = history[0];
+        const archived = history.slice(1);
+
+        // Check if latest is older than 7 days
+        const parseDate = (d) => {
+          if (!d) return null;
+          const parts = d.split("/");
+          if (parts.length === 3) return new Date(parts[2], parts[1]-1, parts[0]);
+          return new Date(d);
+        };
+        const latestDate = parseDate(latest.date);
+        const isOld = latestDate && (new Date() - latestDate) > 7 * 24 * 60 * 60 * 1000;
+        const showLatestInArchive = isOld;
+        const visibleLatest = showLatestInArchive ? null : latest;
+        const archiveItems = showLatestInArchive ? history : archived;
+
+        return (
+          <div className="session-list">
+            {visibleLatest && (
+              <div className="session-item" style={{borderRight:"3px solid var(--sage-dark)",background:"var(--sage-light)"}}>
+                <div style={{fontSize:"0.72rem",fontWeight:600,color:"var(--sage-dark)",marginBottom:4}}>🟢 טיפול אחרון</div>
+                <div className="session-date">📅 {visibleLatest.date}</div>
+                <div className="session-summary">{visibleLatest.summary}</div>
+              </div>
+            )}
+
+            {archiveItems.length > 0 && (
+              <details style={{marginTop:8}}>
+                <summary style={{cursor:"pointer",fontSize:"0.85rem",color:"var(--sage-dark)",fontWeight:500,
+                  padding:"10px 14px",background:"var(--warm)",borderRadius:10,listStyle:"none",
+                  display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                  <span>📁 ארכיון טיפולים ({archiveItems.length})</span>
+                  <span style={{fontSize:"0.75rem",color:"var(--text-soft)"}}>לחץ לפתיחה</span>
+                </summary>
+                <div style={{marginTop:8,display:"flex",flexDirection:"column",gap:8}}>
+                  {archiveItems.map((s, i) => (
+                    <div key={i} className="session-item">
+                      <div className="session-date">📅 {s.date}</div>
+                      <div className="session-summary">{s.summary}</div>
+                    </div>
+                  ))}
+                </div>
+              </details>
+            )}
+          </div>
+        );
+      })()}
 
       {tab === "docs" && (
         <div className="card">
