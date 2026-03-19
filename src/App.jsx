@@ -88,8 +88,6 @@ const GI_SECRET = import.meta.env.VITE_GI_SECRET || "";
 
 // ── Palette & globals ──────────────────────────────────────────────
 const CSS = `
-@import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,300;0,400;0,600;1,300&family=DM+Sans:wght@300;400;500&display=swap');
-
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
