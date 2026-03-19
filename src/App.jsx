@@ -714,7 +714,6 @@ export default function App() {
   const [currentPatientForModal, setCurrentPatientForModal] = useState(null);
   const [sessionNote, setSessionNote] = useState("");
   const [isRecording, setIsRecording] = useState(false);
-  const [recordingTimestamp, setRecordingTimestamp] = useState(null);
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [recSeconds, setRecSeconds] = useState(0);
   const mediaRecorderRef = useRef(null);
@@ -784,27 +783,18 @@ export default function App() {
 
   const saveSessionNote = async () => {
     if (!sessionNote.trim()) return;
-    const now = recordingTimestamp || new Date();
-    const today = now.toLocaleDateString("he-IL");
-    const timeStr = `${now.getHours()}:${String(now.getMinutes()).padStart(2,"0")}`;
-    const filename = recordingTimestamp
-      ? `🎙️ הקלטה_${today.replace(/\//g,"-")}_${timeStr.replace(":",".")}`
-      : null;
-    const summaryWithLabel = filename
-      ? `[${filename}]\n${sessionNote}`
-      : sessionNote;
+    const today = new Date().toLocaleDateString("he-IL");
     try {
-      await sb.addSession(currentPatientForModal.id, today, summaryWithLabel);
+      await sb.addSession(currentPatientForModal.id, today, sessionNote);
       setPatients(prev => prev.map(p => p.id === currentPatientForModal.id ? {
         ...p,
-        history: [{ date: today, summary: summaryWithLabel }, ...(p.history || [])],
+        history: [{ date: today, summary: sessionNote }, ...(p.history || [])],
         sessions: (p.sessions || 0) + 1,
       } : p));
       showNotification(`✅ סיכום נשמר עבור ${currentPatientForModal.name}`);
     } catch {
       showNotification("❌ שגיאה בשמירת הסיכום");
     }
-    setRecordingTimestamp(null);
     closeModal();
   };
 
@@ -886,8 +876,6 @@ export default function App() {
       showNotification("✅ ההקלטה הסתיימה ותומללה");
     };
 
-    const now = new Date();
-    setRecordingTimestamp(now);
     recognition.start();
     setIsRecording(true);
     setRecSeconds(0);
@@ -1504,25 +1492,12 @@ function PatientDetail({ patient, onBack, openModal, generateReport, aiText, aiL
           {(patient.history || []).length === 0 && (
             <p className="text-soft" style={{textAlign:"center",padding:20}}>אין סיכומי טיפולים עדיין</p>
           )}
-          {(patient.history || []).map((s, i) => {
-            if (!s || !s.summary) return null;
-            const isRec = s.summary.startsWith("[🎙️");
-            const lines = s.summary.split("\n");
-            const label = isRec ? lines[0].replace("[","").replace("]","") : null;
-            const text = isRec ? lines.slice(1).join(" ") : s.summary;
-            return (
-              <div key={i} className="session-item">
-                <div className="session-date">📅 {s.date}</div>
-                {isRec && (
-                  <div style={{fontSize:"0.75rem",color:"var(--sage-dark)",background:"var(--sage-light)",
-                    padding:"3px 10px",borderRadius:8,display:"inline-block",marginBottom:6,fontWeight:500}}>
-                    {label}
-                  </div>
-                )}
-                <div className="session-summary">{text}</div>
-              </div>
-            );
-          })}
+          {(patient.history || []).map((s, i) => (
+            <div key={i} className="session-item">
+              <div className="session-date">📅 {s.date}</div>
+              <div className="session-summary">{s.summary}</div>
+            </div>
+          ))}
         </div>
       )}
 
