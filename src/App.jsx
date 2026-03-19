@@ -911,7 +911,12 @@ export default function App() {
       <style>{CSS}</style>
       <div style={{display:"flex",alignItems:"center",justifyContent:"center",height:"100vh",background:"var(--cream)",flexDirection:"column",gap:16}}>
         <div style={{fontFamily:"Fraunces, serif",fontSize:"2rem",color:"var(--sage-dark)"}}>קליניקה</div>
-        <AiLoading />
+        <div style={{display:"flex",gap:6,alignItems:"center",color:"var(--text-soft)",fontSize:"0.85rem"}}>
+          <div style={{width:6,height:6,borderRadius:"50%",background:"var(--sage)",animation:"bounce 0.8s infinite"}} />
+          <div style={{width:6,height:6,borderRadius:"50%",background:"var(--sage)",animation:"bounce 0.8s 0.2s infinite"}} />
+          <div style={{width:6,height:6,borderRadius:"50%",background:"var(--sage)",animation:"bounce 0.8s 0.4s infinite"}} />
+          <span>טוען...</span>
+        </div>
       </div>
     </>
   );
