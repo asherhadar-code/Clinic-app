@@ -1491,18 +1491,22 @@ function PatientDetail({ patient, onBack, openModal, generateReport, aiText, aiL
 
       {tab === "history" && (
         <div className="session-list">
-          {patient.history.map((s, i) => {
-            const isRecording = s.summary?.startsWith("[🎙️");
-            const lines = s.summary?.split("\n") || [];
-            const label = isRecording ? lines[0] : null;
-            const text = isRecording ? lines.slice(1).join("\n") : s.summary;
+          {(patient.history || []).length === 0 && (
+            <p className="text-soft" style={{textAlign:"center",padding:20}}>אין סיכומי טיפולים עדיין</p>
+          )}
+          {(patient.history || []).map((s, i) => {
+            if (!s || !s.summary) return null;
+            const isRec = s.summary.startsWith("[🎙️");
+            const lines = s.summary.split("\n");
+            const label = isRec ? lines[0].replace("[","").replace("]","") : null;
+            const text = isRec ? lines.slice(1).join(" ") : s.summary;
             return (
               <div key={i} className="session-item">
                 <div className="session-date">📅 {s.date}</div>
-                {isRecording && (
+                {isRec && (
                   <div style={{fontSize:"0.75rem",color:"var(--sage-dark)",background:"var(--sage-light)",
                     padding:"3px 10px",borderRadius:8,display:"inline-block",marginBottom:6,fontWeight:500}}>
-                    {label?.replace("[","").replace("]","")}
+                    {label}
                   </div>
                 )}
                 <div className="session-summary">{text}</div>
