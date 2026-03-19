@@ -829,66 +829,52 @@ export default function App() {
     closeModal();
   };
 
-  const startRecording = async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mr = new MediaRecorder(stream);
-      audioChunksRef.current = [];
-      mr.ondataavailable = e => audioChunksRef.current.push(e.data);
-      mr.onstop = async () => {
-        stream.getTracks().forEach(t => t.stop());
-        clearInterval(recTimerRef.current);
-        setIsRecording(false);
-        setIsTranscribing(true);
-        const blob = new Blob(audioChunksRef.current, { type: "audio/webm" });
-        // Create filename with date+time
-        const now = new Date();
-        const filename = `הקלטה_${now.toLocaleDateString("he-IL").replace(/\//g,"-")}_${now.getHours()}-${String(now.getMinutes()).padStart(2,"0")}.webm`;
-        // Transcribe with Claude
-        try {
-          const reader = new FileReader();
-          reader.onload = async () => {
-            const base64 = reader.result.split(",")[1];
-            const res = await fetch("https://api.anthropic.com/v1/messages", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                model: ANTHROPIC_MODEL,
-                max_tokens: 1000,
-                messages: [{
-                  role: "user",
-                  content: [
-                    { type: "text", text: "תמלל את ההקלטה הזו בעברית. כתוב רק את התמליל, ללא כותרות נוספות." },
-                    { type: "document", source: { type: "base64", media_type: "audio/webm", data: base64 } }
-                  ]
-                }]
-              })
-            });
-            const data = await res.json();
-            const transcript = data.content?.[0]?.text || "";
-            if (transcript) {
-              setSessionNote(prev => prev ? prev + "\n" + transcript : transcript);
-              showNotification(`✅ תמלול הושלם — "${filename}"`);
-            } else {
-              showNotification("⚠️ לא הצלחנו לתמלל — הטקסט נשמר ריק");
-            }
-            setIsTranscribing(false);
-            setRecSeconds(0);
-          };
-          reader.readAsDataURL(blob);
-        } catch {
-          setIsTranscribing(false);
-          showNotification("❌ שגיאה בתמלול");
-        }
-      };
-      mr.start();
-      mediaRecorderRef.current = mr;
-      setIsRecording(true);
-      setRecSeconds(0);
-      recTimerRef.current = setInterval(() => setRecSeconds(s => s + 1), 1000);
-    } catch {
-      showNotification("❌ לא ניתן לגשת למיקרופון");
+  const startRecording = () => {
+    if (!("webkitSpeechRecognition" in window) && !("SpeechRecognition" in window)) {
+      showNotification("❌ הדפדפן שלך לא תומך בתמלול דיבור — נסה Chrome");
+      return;
     }
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const recognition = new SR();
+    recognition.lang = "he-IL";
+    recognition.continuous = true;
+    recognition.interimResults = false;
+    mediaRecorderRef.current = recognition;
+
+    recognition.onresult = (e) => {
+      const transcript = Array.from(e.results)
+        .map(r => r[0].transcript).join(" ");
+      if (transcript.trim()) {
+        setSessionNote(prev => prev ? prev + " " + transcript : transcript);
+      }
+    };
+
+    recognition.onerror = (e) => {
+      clearInterval(recTimerRef.current);
+      setIsRecording(false);
+      setIsTranscribing(false);
+      setRecSeconds(0);
+      if (e.error === "no-speech") {
+        showNotification("⚠️ לא זוהה דיבור — נא לדבר בקול ברור ולנסות שוב");
+      } else if (e.error === "not-allowed") {
+        showNotification("❌ אנא אשר גישה למיקרופון");
+      } else {
+        showNotification("❌ שגיאה בתמלול — נסה שוב");
+      }
+    };
+
+    recognition.onend = () => {
+      clearInterval(recTimerRef.current);
+      setIsRecording(false);
+      setIsTranscribing(false);
+      setRecSeconds(0);
+      showNotification("✅ ההקלטה הסתיימה ותומללה");
+    };
+
+    recognition.start();
+    setIsRecording(true);
+    setRecSeconds(0);
+    recTimerRef.current = setInterval(() => setRecSeconds(s => s + 1), 1000);
   };
 
   const stopRecording = () => {
