@@ -994,13 +994,13 @@ export default function App() {
             <div style={{fontWeight:500,marginBottom:6,color:"var(--sage-dark)"}}>📋 פרטי הורה</div>
             <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
               <div style={{flex:1}}>
-                <p className="field-label">טלפון</p>
+                <div className="field-label">טלפון</div>
                 <input className="field" placeholder="050-0000000"
                   value={receiptData.phone ?? (currentPatientForModal?.phone || "")}
                   onChange={e => setReceiptData({...receiptData, phone: e.target.value})} />
               </div>
               <div style={{flex:1}}>
-                <p className="field-label">מייל (לשליחת קבלה)</p>
+                <div className="field-label">מייל (לשליחת קבלה)</div>
                 <input className="field" type="email" placeholder="example@gmail.com"
                   style={{direction:"ltr",textAlign:"right"}}
                   value={receiptData.email ?? (currentPatientForModal?.email || "")}
@@ -1012,15 +1012,15 @@ export default function App() {
             )}
           </div>
 
-          <p className="field-label">סכום</p>
+          <div className="field-label">סכום</div>
           <input className="field" type="number" placeholder="₪" value={receiptData.amount}
             onChange={e => setReceiptData({...receiptData, amount: e.target.value})} />
-          <p className="field-label">אמצעי תשלום</p>
+          <div className="field-label">אמצעי תשלום</div>
           <select className="field" value={receiptData.method}
             onChange={e => setReceiptData({...receiptData, method: e.target.value})}>
             <option>ביט</option><option>פייבוקס</option><option>העברה בנקאית</option><option>מזומן</option>
           </select>
-          <p className="field-label">הערה (אופציונלי)</p>
+          <div className="field-label">הערה (אופציונלי)</div>
           <input className="field" placeholder="למשל: טיפול ראשון" value={receiptData.note}
             onChange={e => setReceiptData({...receiptData, note: e.target.value})} />
 
