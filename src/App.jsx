@@ -662,18 +662,26 @@ export default function App() {
   const addPatient = async (data) => {
     try {
       const newP = await sb.addPatient(data);
-      if (newP) {
+      if (newP && newP.id) {
         const patient = {
-          ...newP,
-          firstName: newP.first_name,
-          lastName: newP.last_name,
-          birthDate: newP.birth_date,
-          idNumber: newP.id_number,
-          parentName: newP.parent_name,
-          nextAppt: newP.next_appt,
+          id: String(newP.id || ""),
+          firstName: String(newP.first_name || ""),
+          lastName: String(newP.last_name || ""),
+          name: String(newP.name || ((newP.first_name || "") + " " + (newP.last_name || "")).trim()),
+          gender: String(newP.gender || ""),
+          age: newP.birth_date ? String(calcAge(newP.birth_date).replace("גיל: ","")) : "",
+          birthDate: String(newP.birth_date || ""),
+          idNumber: String(newP.id_number || ""),
+          diagnosis: String(newP.diagnosis || ""),
+          phone: String(newP.phone || ""),
+          email: String(newP.email || ""),
+          parentName: String(newP.parent_name || ""),
+          nextAppt: String(newP.next_appt || "טרם נקבע"),
+          sessions: 0,
+          paid: true,
           history: [],
         };
-        setPatients(prev => [...prev, patient]);
+        setPatients(prev => [...prev.filter(p => p && p.id), patient]);
       }
       showNotification("✅ " + data.firstName + " " + data.lastName + " נוסף בהצלחה");
     } catch {
@@ -1393,7 +1401,7 @@ function AddBtn({ onClick }) {
 // ── Patient List ───────────────────────────────────────────────────
 function PatientList({ patients, onSelect, onAdd }) {
   const [q, setQ] = useState("");
-  const filtered = patients.filter(p => (p.name || "").includes(q) || (p.diagnosis || "").includes(q));
+  const filtered = patients.filter(p => p && ((p.name || "").includes(q) || (p.diagnosis || "").includes(q)));
   return (
     <>
       <div className="top-bar">
