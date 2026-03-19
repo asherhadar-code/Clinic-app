@@ -8,9 +8,11 @@ const SUPABASE_KEY  = import.meta.env.VITE_SUPABASE_ANON_KEY || "";
 
 const sb = {
   async getPatients() {
+    if (!SUPABASE_URL || !SUPABASE_KEY) return [];
     const res = await fetch(`${SUPABASE_URL}/rest/v1/patients?select=*,sessions(*)&order=created_at.asc`, {
       headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` }
     });
+    if (!res.ok) return [];
     const data = await res.json();
     if (!Array.isArray(data)) return [];
     return data.map(p => ({
@@ -638,13 +640,16 @@ export default function App() {
 
   // Load patients from Supabase on startup
   useEffect(() => {
-    sb.getPatients().then(data => {
-      setPatients(data);
-      setLoading(false);
-    }).catch(() => {
-      setPatients(INITIAL_PATIENTS);
-      setLoading(false);
-    });
+    sb.getPatients()
+      .then(data => {
+        setPatients(Array.isArray(data) ? data : []);
+        setLoading(false);
+      })
+      .catch(err => {
+        console.error("Supabase error:", err);
+        setPatients([]);
+        setLoading(false);
+      });
   }, []);
 
   const addPatient = async (data) => {
