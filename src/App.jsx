@@ -675,17 +675,16 @@ const WEEK_APTS = {
 
 // ── Claude API helper ──────────────────────────────────────────────
 async function askClaude(prompt) {
-  const res = await fetch("https://api.anthropic.com/v1/messages", {
+  const res = await fetch("/api/ai", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      model: ANTHROPIC_MODEL,
       max_tokens: 1000,
       messages: [{ role: "user", content: prompt }],
     }),
   });
   const data = await res.json();
-  return data.content?.map(b => b.text || "").join("") || "שגיאה בתשובה";
+  return data.text || data.error || "שגיאה בתשובה";
 }
 
 function AiLoading() {
@@ -999,19 +998,19 @@ ${history || "אין עדיין סיכומי טיפולים"}
 
 ענה בעברית בסגנון מקצועי וחם. אם מתבקש דוח — כתוב בסגנון קלינאית תקשורת מנוסה.`;
     try {
-      const res = await fetch("https://api.anthropic.com/v1/messages", {
+      const res = await fetch("/api/ai", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          model: ANTHROPIC_MODEL,
-          max_tokens: 1500,
           system: systemPrompt,
-          messages: newMessages.filter(m => m.role !== "assistant" || m !== newMessages[0])
+          max_tokens: 1500,
+          messages: newMessages
+            .filter(m => m.role === "user" || (m.role === "assistant" && m !== newMessages[0]))
             .map(m => ({ role: m.role === "user" ? "user" : "assistant", content: m.text }))
         })
       });
       const data = await res.json();
-      const reply = data.content?.[0]?.text || "מצטער, לא הצלחתי לענות";
+      const reply = data.text || data.error || "מצטער, לא הצלחתי לענות";
       setAiChatMessages(prev => [...prev, { role: "assistant", text: reply }]);
     } catch {
       setAiChatMessages(prev => [...prev, { role: "assistant", text: "שגיאה בחיבור ל-AI" }]);
