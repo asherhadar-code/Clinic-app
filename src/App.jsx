@@ -920,7 +920,7 @@ export default function App() {
     <>
       <style>{CSS}</style>
       <div className="app">
-        <Sidebar page={page} setPage={setPage} />
+        <Sidebar page={page} setPage={(p) => { setPage(p); setSelectedPatient(null); }} />
         <main className="main">
           {notification && <div className="banner">🔔 {notification}</div>}
 
@@ -1126,7 +1126,7 @@ function Sidebar({ page, setPage }) {
       </div>
       {nav.map(n => (
         <div key={n.id} className={`nav-item ${page === n.id || (page==="patient_detail" && n.id==="patients") ? "active":""}`}
-          onClick={() => { setPage(n.id); setSelectedPatient(null); }}>
+          onClick={() => setPage(n.id)}>
           <span className="nav-icon">{n.icon}</span>{n.label}
         </div>
       ))}
@@ -1393,7 +1393,7 @@ function AddBtn({ onClick }) {
 // ── Patient List ───────────────────────────────────────────────────
 function PatientList({ patients, onSelect, onAdd }) {
   const [q, setQ] = useState("");
-  const filtered = patients.filter(p => p.name.includes(q) || p.diagnosis.includes(q));
+  const filtered = patients.filter(p => (p.name || "").includes(q) || (p.diagnosis || "").includes(q));
   return (
     <>
       <div className="top-bar">
