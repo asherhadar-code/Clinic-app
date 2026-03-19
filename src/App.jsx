@@ -16,24 +16,24 @@ const sb = {
     const data = await res.json();
     if (!Array.isArray(data)) return [];
     return data.map(p => ({
-      id: p.id,
-      firstName: p.first_name || "",
-      lastName: p.last_name || "",
-      name: p.name || ((p.first_name || "") + " " + (p.last_name || "")).trim(),
-      gender: p.gender || "",
-      age: p.birth_date ? calcAge(p.birth_date).replace("גיל: ","") : "",
-      birthDate: p.birth_date || "",
-      idNumber: p.id_number || "",
-      diagnosis: p.diagnosis || "",
-      phone: p.phone || "",
-      email: p.email || "",
-      parentName: p.parent_name || "",
-      nextAppt: p.next_appt || "טרם נקבע",
-      sessions: p.sessions || 0,
+      id: String(p.id || ""),
+      firstName: String(p.first_name || ""),
+      lastName: String(p.last_name || ""),
+      name: String(p.name || ((p.first_name || "") + " " + (p.last_name || "")).trim()),
+      gender: String(p.gender || ""),
+      age: p.birth_date ? String(calcAge(p.birth_date).replace("גיל: ","")) : "",
+      birthDate: String(p.birth_date || ""),
+      idNumber: String(p.id_number || ""),
+      diagnosis: String(p.diagnosis || ""),
+      phone: String(p.phone || ""),
+      email: String(p.email || ""),
+      parentName: String(p.parent_name || ""),
+      nextAppt: String(p.next_appt || "טרם נקבע"),
+      sessions: typeof p.sessions === 'number' ? p.sessions : 0,
       paid: p.paid ?? true,
-      history: ((p.sessions && Array.isArray(p.sessions)) ? p.sessions : [])
+      history: (Array.isArray(p.sessions) ? p.sessions : [])
         .sort((a,b) => new Date(b.created_at) - new Date(a.created_at))
-        .map(s => ({ date: s.date, summary: s.summary })),
+        .map(s => ({ date: String(s.date || ""), summary: String(s.summary || "") })),
     }));
   },
   async addPatient(p) {
