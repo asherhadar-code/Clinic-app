@@ -630,6 +630,15 @@ async function askClaude(prompt) {
   return data.content?.map(b => b.text || "").join("") || "שגיאה בתשובה";
 }
 
+function AiLoading() {
+  return (
+    <div className="ai-loading">
+      <div className="dot" /><div className="dot" /><div className="dot" />
+      <span>AI מנתח...</span>
+    </div>
+  );
+}
+
 // ══════════════════════════════════════════════════════════════════
 export default function App() {
   const [page, setPage] = useState("dashboard");
@@ -1717,11 +1726,3 @@ function Modal({ children, onClose }) {
   );
 }
 
-function AiLoading() {
-  return (
-    <div className="ai-loading">
-      <div className="dot" /><div className="dot" /><div className="dot" />
-      <span>AI מנתח...</span>
-    </div>
-  );
-}
