@@ -678,7 +678,7 @@ export default function App() {
           parentName: String(newP.parent_name || ""),
           nextAppt: String(newP.next_appt || "טרם נקבע"),
           sessions: 0,
-          paid: true,
+          paid: false,
           history: [],
         };
         setPatients(prev => [...prev.filter(p => p && p.id), patient]);
@@ -1175,14 +1175,14 @@ function Dashboard({ patients, openModal, sendWhatsApp }) {
 
       <div className="card">
         <div className="card-title">⏰ לא שילמו</div>
-        {patients.filter(p => !p.paid).map(p => (
+        {patients.filter(p => p && !p.paid).map(p => (
           <div key={p.id} className="patient-row">
-            <div className="patient-avatar">{p.name[0]}</div>
+            <div className="patient-avatar">{(p.name||"?")[0]}</div>
             <div className="patient-info">
               <div className="patient-name">{p.name}</div>
-              <div className="patient-meta">טיפול אחרון: {p.history[0]?.date}</div>
+              <div className="patient-meta" style={{color:"#C4724A"}}>❌ טרם שולם</div>
             </div>
-            <button className="btn btn-sm btn-danger" onClick={() => openModal("receipt", p)}>הנפק קבלה</button>
+            <button className="btn btn-sm btn-danger" onClick={() => openModal("receipt", p)}>🧾 הנפק קבלה</button>
           </div>
         ))}
       </div>
@@ -1417,8 +1417,12 @@ function PatientList({ patients, onSelect, onAdd }) {
               <div className="patient-name">{p.name} <span className="text-soft">(גיל {p.age})</span></div>
               <div className="patient-meta">{p.diagnosis} · {p.sessions} פגישות</div>
             </div>
-            <div className={`patient-status`} style={p.paid ? {} : {background:"#FBE8E3",color:"#C4724A"}}>
-              {p.paid ? "שולם ✓" : "ממתין לתשלום"}
+            <div style={{
+              fontSize:"0.72rem", padding:"4px 10px", borderRadius:20, fontWeight:500,
+              background: p.paid ? "#E8F5E8" : "#FBE8E3",
+              color: p.paid ? "#2E7D32" : "#C4724A"
+            }}>
+              {p.paid ? "✅ שולם" : "❌ טרם שולם"}
             </div>
           </div>
         ))}
@@ -1596,7 +1600,28 @@ function PatientDetail({ patient, onBack, openModal, generateReport, aiText, aiL
           {patient.email && <p className="mt-2"><strong>מייל:</strong> {patient.email}</p>}
           <p className="mt-2"><strong>מס' פגישות:</strong> {patient.sessions}</p>
           <p className="mt-2"><strong>תור הבא:</strong> {patient.nextAppt}</p>
-          <p className="mt-2"><strong>סטטוס תשלום:</strong> {patient.paid ? "✅ שולם" : "⏳ ממתין לתשלום"}</p>
+          <div className="mt-2" style={{display:"flex",alignItems:"center",gap:12}}>
+            <strong>סטטוס תשלום:</strong>
+            <div style={{
+              fontSize:"0.82rem", padding:"4px 12px", borderRadius:20, fontWeight:500,
+              background: patient.paid ? "#E8F5E8" : "#FBE8E3",
+              color: patient.paid ? "#2E7D32" : "#C4724A"
+            }}>
+              {patient.paid ? "✅ שולם" : "❌ טרם שולם"}
+            </div>
+            <button className="btn btn-sm" style={{
+              background: patient.paid ? "#FBE8E3" : "#E8F5E8",
+              color: patient.paid ? "#C4724A" : "#2E7D32",
+              fontSize:"0.75rem"
+            }} onClick={() => {
+              const newPaid = !patient.paid;
+              setPatients(prev => prev.map(p => p.id === patient.id ? {...p, paid: newPaid} : p));
+              sb.markPaid(patient.id, newPaid).catch(() => {});
+              showNotification(newPaid ? "✅ סומן כשולם" : "❌ סומן כטרם שולם");
+            }}>
+              {patient.paid ? "סמן כטרם שולם" : "סמן כשולם"}
+            </button>
+          </div>
         </div>
       )}
     </>
@@ -1630,7 +1655,7 @@ function Receipts({ patients, openModal }) {
               <div className="patient-name">{p.name}</div>
               <div className="patient-meta">תור אחרון: {p.history[0]?.date}</div>
             </div>
-            <span className="patient-status">שולם ✓</span>
+            <span style={{fontSize:"0.72rem",padding:"4px 10px",borderRadius:20,fontWeight:500,background:"#E8F5E8",color:"#2E7D32"}}>✅ שולם</span>
           </div>
         ))}
       </div>
