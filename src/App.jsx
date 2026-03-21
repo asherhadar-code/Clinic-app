@@ -576,6 +576,26 @@ h1,h2,h3,h4 { font-family: 'Fraunces', serif; font-weight: 300; }
 .picker-break-btn { width: 100%; padding: 8px; border-radius: 8px; background: var(--warm); border: none; font-family: 'DM Sans',sans-serif; font-size: 0.82rem; cursor: pointer; transition: background 0.12s; }
 .picker-break-btn:hover { background: #d4c8b0; }
 
+/* ── Documents Bank ── */
+.doc-bank-tabs {
+  display: flex; gap: 4px; margin-bottom: 20px;
+  background: var(--warm); border-radius: 12px; padding: 4px;
+}
+.doc-bank-tab {
+  flex: 1; text-align: center; padding: 10px;
+  border-radius: 10px; cursor: pointer; font-size: 0.85rem;
+  transition: all 0.15s; color: var(--text-soft);
+}
+.doc-bank-tab.active {
+  background: var(--white); color: var(--sage-dark);
+  font-weight: 600; box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+}
+.doc-bank-empty {
+  text-align: center; padding: 40px 20px;
+  color: var(--text-soft); font-size: 0.88rem;
+}
+.doc-bank-empty .empty-icon { font-size: 2.5rem; margin-bottom: 12px; }
+
 /* ── AI Chat ── */
 .ai-chat-box {
   display: flex; flex-direction: column; gap: 10px;
@@ -805,6 +825,20 @@ export default function App() {
   const [aiChatPatient, setAiChatPatient] = useState(null);
   const [receiptData, setReceiptData] = useState({ amount: "", method: "ביט", note: "" });
   const [notification, setNotification] = useState("");
+  const [docBank, setDocBank] = useState({
+    continuation: [], // בקשה להמשך
+    discharge: [],    // דוח סיום טיפול
+    diagnosis: [],    // אבחונים
+  });
+
+  const addDocToBank = (category, doc) => {
+    setDocBank(prev => ({ ...prev, [category]: [...prev[category], doc] }));
+  };
+
+  const removeDocFromBank = (category, idx) => {
+    setDocBank(prev => ({ ...prev, [category]: prev[category].filter((_, i) => i !== idx) }));
+  };
+
   const [documents, setDocuments] = useState({
     1: [
       { name: "דוח_ראשוני_יוסי.pdf", type: "report", date: "01/01/2025", size: "245 KB" },
@@ -1059,6 +1093,7 @@ ${history || "אין עדיין סיכומי טיפולים"}
               onEdit={() => { setEditingPatient(selectedPatient); setPatientModal("edit"); }}
               onDelete={() => deletePatient(selectedPatient.id)} />}
           {page === "receipts" && <Receipts patients={patients} openModal={openModal} />}
+          {page === "documents_bank" && <DocumentsBank docBank={docBank} addDocToBank={addDocToBank} removeDocFromBank={removeDocFromBank} />}
         </main>
       </div>
 
@@ -1276,10 +1311,11 @@ ${history || "אין עדיין סיכומי טיפולים"}
 // ── Sidebar ────────────────────────────────────────────────────────
 function Sidebar({ page, setPage }) {
   const nav = [
-    { id:"dashboard", icon:"🏠", label:"ראשי" },
-    { id:"calendar",  icon:"📅", label:"יומן" },
-    { id:"patients",  icon:"👥", label:"מטופלים" },
-    { id:"receipts",  icon:"🧾", label:"קבלות" },
+    { id:"dashboard",       icon:"🏠", label:"ראשי" },
+    { id:"calendar",        icon:"📅", label:"יומן" },
+    { id:"patients",        icon:"👥", label:"מטופלים" },
+    { id:"receipts",        icon:"🧾", label:"קבלות" },
+    { id:"documents_bank",  icon:"📚", label:"מסמכים" },
   ];
   return (
     <aside className="sidebar">
@@ -1991,6 +2027,149 @@ function PatientFormModal({ mode, patient, onSave, onClose }) {
         </div>
       </div>
     </div>
+  );
+}
+
+// ── Documents Bank ────────────────────────────────────────────────
+function DocumentsBank({ docBank, addDocToBank, removeDocFromBank }) {
+  const [activeTab, setActiveTab] = useState("continuation");
+  const [analyzing, setAnalyzing] = useState(false);
+  const [styleNote, setStyleNote] = useState("");
+  const fileInputRef = useRef();
+
+  const categories = [
+    { id: "continuation", label: "📋 בקשה להמשך", desc: "בקשות להמשך טיפול" },
+    { id: "discharge",    label: "📄 דוח סיום",    desc: "דוחות סיום טיפול" },
+    { id: "diagnosis",    label: "🔍 אבחונים",      desc: "דוחות אבחון" },
+  ];
+
+  const handleFiles = (files) => {
+    Array.from(files).forEach(file => {
+      const size = file.size > 1024*1024 ? (file.size/1024/1024).toFixed(1)+" MB" : Math.round(file.size/1024)+" KB";
+      addDocToBank(activeTab, {
+        name: file.name,
+        date: new Date().toLocaleDateString("he-IL"),
+        size,
+        type: file.name.split(".").pop().toLowerCase(),
+      });
+    });
+  };
+
+  const analyzeStyle = async () => {
+    const allDocs = [...docBank.continuation, ...docBank.discharge, ...docBank.diagnosis];
+    if (allDocs.length === 0) {
+      setStyleNote("⚠️ אין מסמכים להניתוח. העלי מסמכים קודם.");
+      return;
+    }
+    setAnalyzing(true);
+    const docList = allDocs.map(d => d.name).join(", ");
+    try {
+      const res = await fetch("/api/ai", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          max_tokens: 800,
+          messages: [{
+            role: "user",
+            content: `יש לי ${allDocs.length} מסמכים מקצועיים: ${docList}. 
+על סמך שמות המסמכים, תאר בקצרה איך נראה סגנון כתיבה מקצועי של קלינאית תקשורת בדוחות כאלה. 
+מה האלמנטים החשובים? מה הטון? מה המבנה? כתוב 3-4 משפטים בעברית.`
+          }]
+        })
+      });
+      const data = await res.json();
+      setStyleNote(data.text || "לא הצלחתי לנתח");
+    } catch {
+      setStyleNote("שגיאה בניתוח");
+    }
+    setAnalyzing(false);
+  };
+
+  const activeDocs = docBank[activeTab] || [];
+  const activeCategory = categories.find(c => c.id === activeTab);
+  const totalDocs = Object.values(docBank).flat().length;
+
+  return (
+    <>
+      <div className="top-bar">
+        <h1 className="page-title" style={{marginBottom:0}}>📚 מאגר מסמכים</h1>
+        <div style={{fontSize:"0.82rem",color:"var(--text-soft)"}}>
+          {totalDocs} מסמכים סה"כ
+        </div>
+      </div>
+
+      {/* Style analysis card */}
+      <div className="card" style={{marginBottom:20,background:"linear-gradient(135deg,#E8F0E8,#F0EDE8)"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",flexWrap:"wrap",gap:12}}>
+          <div style={{flex:1}}>
+            <div style={{fontWeight:600,color:"var(--sage-dark)",marginBottom:4}}>🤖 ניתוח סגנון כתיבה</div>
+            <div style={{fontSize:"0.82rem",color:"var(--text-soft)"}}>
+              ה-AI ילמד את סגנון הכתיבה מהמסמכים שהעלית
+            </div>
+            {styleNote && <div style={{marginTop:10,fontSize:"0.85rem",lineHeight:1.6}}>{styleNote}</div>}
+          </div>
+          <button className="btn btn-primary btn-sm" onClick={analyzeStyle} disabled={analyzing}>
+            {analyzing ? "מנתח..." : "🔍 נתח סגנון"}
+          </button>
+        </div>
+      </div>
+
+      {/* Category tabs */}
+      <div className="doc-bank-tabs">
+        {categories.map(c => (
+          <div key={c.id} className={`doc-bank-tab ${activeTab === c.id ? "active" : ""}`}
+            onClick={() => setActiveTab(c.id)}>
+            {c.label}
+            {docBank[c.id].length > 0 && (
+              <span style={{marginRight:4,background:"var(--sage-dark)",color:"white",
+                borderRadius:"50%",width:18,height:18,display:"inline-flex",
+                alignItems:"center",justifyContent:"center",fontSize:"0.7rem"}}>
+                {docBank[c.id].length}
+              </span>
+            )}
+          </div>
+        ))}
+      </div>
+
+      {/* Upload zone */}
+      <div className="card">
+        <div style={{fontWeight:500,marginBottom:12,color:"var(--sage-dark)"}}>
+          {activeCategory?.label} — {activeCategory?.desc}
+        </div>
+
+        <div className="upload-zone" onClick={() => fileInputRef.current.click()}
+          onDragOver={e => { e.preventDefault(); }}
+          onDrop={e => { e.preventDefault(); handleFiles(e.dataTransfer.files); }}>
+          <div className="upload-icon">📂</div>
+          <p><strong>לחצי להעלאת מסמך</strong> או גררי לכאן</p>
+          <p style={{marginTop:4}}>PDF, Word — עד 20MB</p>
+          <input ref={fileInputRef} type="file" multiple accept=".pdf,.doc,.docx"
+            style={{display:"none"}} onChange={e => handleFiles(e.target.files)} />
+        </div>
+
+        {/* Docs list */}
+        {activeDocs.length === 0 ? (
+          <div className="doc-bank-empty">
+            <div className="empty-icon">📭</div>
+            <p>אין מסמכים בקטגוריה זו עדיין</p>
+          </div>
+        ) : (
+          <div className="doc-list" style={{marginTop:16}}>
+            {activeDocs.map((doc, i) => (
+              <div key={i} className="doc-item">
+                <div className="doc-icon">{doc.type === "pdf" ? "📄" : "📝"}</div>
+                <div className="doc-info">
+                  <div className="doc-name">{doc.name}</div>
+                  <div className="doc-meta">{doc.date} · {doc.size}</div>
+                </div>
+                <button className="btn btn-danger btn-sm"
+                  onClick={() => removeDocFromBank(activeTab, i)}>🗑️</button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </>
   );
 }
 
