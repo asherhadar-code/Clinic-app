@@ -1665,28 +1665,48 @@ function Calendar({ patients, appointments, setAppointments, openModal, sendWhat
 
   const addBlock = async (dayIdx, insertAfterIdx) => {
     if (addType === "break") {
-      // Calculate start time based on position
       const timeline = buildTimeline(dayIdx);
+      // startTime of the break = end of block before it
       const insertAfter = timeline[insertAfterIdx];
-      const startTime = insertAfter ? insertAfter.endTime : dayStart;
+      const breakStart = insertAfter ? insertAfter.endTime : dayStart;
+
       try {
+        // 1. Save the break
         const newApt = await sb.addAppointment({
           dayIndex: dayIdx,
-          startTime,
+          startTime: breakStart,
           blockType: "break",
           minutes: breakMins,
           status: "break"
         });
-        if (newApt && newApt.id) {
-          setAppointments(prev => [...prev, { 
-            ...newApt, 
-            day_index: dayIdx, 
-            block_type: "break", 
-            minutes: breakMins,
-            start_time: startTime,
-            status: "break"
-          }]);
-        }
+
+        // 2. Update all appointments AFTER the break — shift their start_time by breakMins
+        const toMin = t => { const [h,m] = t.split(":").map(Number); return h*60+m; };
+        const toTime = m => String(Math.floor(m/60)).padStart(2,"0") + ":" + String(m%60).padStart(2,"0");
+        
+        const breakStartMin = toMin(breakStart);
+        const afterBreak = timeline.slice(insertAfterIdx + 1);
+        
+        // Update each subsequent appointment in Supabase
+        const updatePromises = afterBreak.map(b => {
+          const newStart = toTime(toMin(b.startTime) + breakMins);
+          return sb.updateAppointmentStatus(b.id, b.status).then(() =>
+            fetch(`${SUPABASE_URL}/rest/v1/appointments?id=eq.${b.id}`, {
+              method: "PATCH",
+              headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json" },
+              body: JSON.stringify({ start_time: newStart })
+            })
+          );
+        });
+        await Promise.all(updatePromises);
+
+        // 3. Reload appointments from Supabase to reflect all changes
+        const res = await fetch(`${SUPABASE_URL}/rest/v1/appointments?select=*&order=day_index.asc,start_time.asc`, {
+          headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` }
+        });
+        const updated = await res.json();
+        if (Array.isArray(updated)) setAppointments(updated);
+
       } catch(e) {
         console.error("Error adding break:", e);
       }
