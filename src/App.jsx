@@ -112,6 +112,29 @@ const sb = {
       headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json" },
       body: JSON.stringify({ status })
     });
+  },
+  async getDocumentBank() {
+    if (!SUPABASE_URL || !SUPABASE_KEY) return [];
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/document_bank?select=*&order=created_at.desc`, {
+      headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` }
+    });
+    if (!res.ok) return [];
+    return await res.json();
+  },
+  async addDocumentBank(doc) {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/document_bank`, {
+      method: "POST",
+      headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json", Prefer: "return=representation" },
+      body: JSON.stringify({ category: doc.category, name: doc.name, size: doc.size, date: doc.date })
+    });
+    const data = await res.json();
+    return Array.isArray(data) ? data[0] : data;
+  },
+  async deleteDocumentBank(id) {
+    await fetch(`${SUPABASE_URL}/rest/v1/document_bank?id=eq.${id}`, {
+      method: "DELETE",
+      headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` }
+    });
   }
 };
 const GI_KEY    = import.meta.env.VITE_GI_KEY || "";
@@ -725,12 +748,18 @@ export default function App() {
   const [patientModal, setPatientModal] = useState(null);
   const [editingPatient, setEditingPatient] = useState(null);
 
-  // Load patients and appointments from Supabase on startup
+  // Load patients, appointments and document bank from Supabase on startup
   useEffect(() => {
-    Promise.all([sb.getPatients(), sb.getAppointments()])
-      .then(([pData, aData]) => {
+    Promise.all([sb.getPatients(), sb.getAppointments(), sb.getDocumentBank()])
+      .then(([pData, aData, dData]) => {
         setPatients(Array.isArray(pData) ? pData : []);
         setAppointments(Array.isArray(aData) ? aData : []);
+        // Build docBank from flat array
+        const bank = { continuation: [], discharge: [], diagnosis: [] };
+        (Array.isArray(dData) ? dData : []).forEach(d => {
+          if (bank[d.category]) bank[d.category].push({ ...d });
+        });
+        setDocBank(bank);
         setLoading(false);
       })
       .catch(err => {
@@ -831,11 +860,23 @@ export default function App() {
     diagnosis: [],    // אבחונים
   });
 
-  const addDocToBank = (category, doc) => {
-    setDocBank(prev => ({ ...prev, [category]: [...prev[category], doc] }));
+  const addDocToBank = async (category, doc) => {
+    try {
+      const saved = await sb.addDocumentBank({ ...doc, category });
+      if (saved && saved.id) {
+        setDocBank(prev => ({ ...prev, [category]: [...prev[category], { ...saved }] }));
+      }
+    } catch {
+      // fallback: add locally
+      setDocBank(prev => ({ ...prev, [category]: [...prev[category], doc] }));
+    }
   };
 
-  const removeDocFromBank = (category, idx) => {
+  const removeDocFromBank = async (category, idx) => {
+    const doc = docBank[category][idx];
+    if (doc && doc.id) {
+      try { await sb.deleteDocumentBank(doc.id); } catch {}
+    }
     setDocBank(prev => ({ ...prev, [category]: prev[category].filter((_, i) => i !== idx) }));
   };
 
