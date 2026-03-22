@@ -143,6 +143,22 @@ const sb = {
       method: "DELETE",
       headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` }
     });
+  },
+  async getReceipts() {
+    if (!SUPABASE_URL || !SUPABASE_KEY) return [];
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/receipts?select=*&order=created_at.desc`, {
+      headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` }
+    });
+    if (!res.ok) return [];
+    const data = await res.json();
+    return Array.isArray(data) ? data : [];
+  },
+  async saveReceipt(r) {
+    await fetch(`${SUPABASE_URL}/rest/v1/receipts`, {
+      method: "POST",
+      headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ patient_id: r.patientId, patient_name: r.patientName, amount: r.amount, method: r.method, note: r.note, receipt_number: r.receiptNumber })
+    });
   }
 };
 const GI_KEY    = import.meta.env.VITE_GI_KEY || "";
@@ -826,13 +842,14 @@ export default function App() {
     });
   };
   const [appointments, setAppointments] = useState([]);
+  const [receiptsHistory, setReceiptsHistory] = useState([]);
   const [patientModal, setPatientModal] = useState(null);
   const [editingPatient, setEditingPatient] = useState(null);
 
   // Load patients, appointments and document bank from Supabase on startup
   useEffect(() => {
-    Promise.all([sb.getPatients(), sb.getAppointments(), sb.getDocumentBank()])
-      .then(([pData, aData, dData]) => {
+    Promise.all([sb.getPatients(), sb.getAppointments(), sb.getDocumentBank(), sb.getReceipts()])
+      .then(([pData, aData, dData, rData]) => {
         setPatients(Array.isArray(pData) ? pData : []);
         setAppointments(Array.isArray(aData) ? aData : []);
         // Build docBank from flat array
@@ -841,6 +858,7 @@ export default function App() {
           if (bank[d.category]) bank[d.category].push({ ...d });
         });
         setDocBank(bank);
+        setReceiptsHistory(Array.isArray(rData) ? rData : []);
         setLoading(false);
       })
       .catch(err => {
@@ -1108,6 +1126,19 @@ export default function App() {
         ));
         sb.markPaid(currentPatientForModal?.id, true).catch(() => {});
         showNotification(`✅ קבלה מס' ${data.receiptNumber} נוצרה ונשלחה בהצלחה!`);
+        // Save to receipts history
+        try {
+          await sb.saveReceipt({
+            patientId: currentPatientForModal?.id,
+            patientName: currentPatientForModal?.name,
+            amount: parseFloat(receiptData.amount),
+            method: receiptData.method,
+            note: receiptData.note,
+            receiptNumber: data.receiptNumber
+          });
+          const rData = await sb.getReceipts();
+          setReceiptsHistory(Array.isArray(rData) ? rData : []);
+        } catch {}
       } else {
         showNotification(`❌ שגיאה: ${data.error}`);
       }
@@ -1280,7 +1311,7 @@ ${styleExamples ? `להלן דוגמאות לסגנון הכתיבה של הקל
               documents={documents[selectedPatient.id] || []} addDocument={addDocument} removeDocument={removeDocument}
               onEdit={() => { setEditingPatient(selectedPatient); setPatientModal("edit"); }}
               onDelete={() => deletePatient(selectedPatient.id)} />}
-          {page === "receipts" && <Receipts patients={patients} openModal={openModal} />}
+          {page === "receipts" && <Receipts patients={patients} openModal={openModal} receiptsHistory={receiptsHistory} />}
           {page === "settings" && <Settings settings={settings} saveSetting={saveSetting} />}
           {page === "documents_bank" && <DocumentsBank docBank={docBank} addDocToBank={addDocToBank} removeDocFromBank={removeDocFromBank} showNotification={showNotification} />}
         </main>
@@ -2113,35 +2144,61 @@ function PatientDetail({ patient, onBack, openModal, generateReport, aiText, aiL
 }
 
 // ── Receipts ───────────────────────────────────────────────────────
-function Receipts({ patients, openModal }) {
+function Receipts({ patients, openModal, receiptsHistory }) {
   return (
     <>
       <h1 className="page-title">🧾 קבלות ותשלומים</h1>
+
+      {/* Unpaid patients */}
       <div className="card">
-        <div className="card-title">ממתינים לתשלום</div>
-        {patients.filter(p => !p.paid).map(p => (
+        <div className="card-title">⏳ ממתינים לתשלום ({patients.filter(p => !p.paid).length})</div>
+        {patients.filter(p => !p.paid).length === 0 && (
+          <p className="text-soft" style={{padding:"8px 0"}}>✅ כל המטופלים שילמו</p>
+        )}
+        {patients.filter(p => p && !p.paid).map(p => (
           <div key={p.id} className="patient-row">
-            <div className="patient-avatar">{p.name[0]}</div>
+            <div className="patient-avatar">{(p.name||"?")[0]}</div>
             <div className="patient-info">
               <div className="patient-name">{p.name}</div>
-              <div className="patient-meta">תור אחרון: {p.history[0]?.date}</div>
+              <div className="patient-meta" style={{color:"#C4724A"}}>❌ טרם שולם</div>
             </div>
-            <button className="btn btn-primary btn-sm" onClick={() => openModal("receipt", p)}>הנפק קבלה</button>
+            <button className="btn btn-primary btn-sm" onClick={() => openModal("receipt", p)}>🧾 הנפק קבלה</button>
           </div>
         ))}
       </div>
+
+      {/* Receipts history */}
       <div className="card">
-        <div className="card-title">שולמו</div>
-        {patients.filter(p => p.paid).map(p => (
-          <div key={p.id} className="patient-row">
-            <div className="patient-avatar">{p.name[0]}</div>
-            <div className="patient-info">
-              <div className="patient-name">{p.name}</div>
-              <div className="patient-meta">תור אחרון: {p.history[0]?.date}</div>
+        <div className="card-title">📋 היסטוריית קבלות ({receiptsHistory?.length || 0})</div>
+        {(receiptsHistory?.length || 0) === 0 && (
+          <p className="text-soft" style={{padding:"8px 0"}}>אין קבלות עדיין</p>
+        )}
+        {(receiptsHistory || []).map((r, i) => {
+          const date = new Date(r.created_at);
+          const dateStr = date.toLocaleDateString("he-IL");
+          const timeStr = date.toLocaleTimeString("he-IL", {hour:"2-digit",minute:"2-digit"});
+          return (
+            <div key={i} className="patient-row" style={{borderBottom:"1px solid var(--warm)",paddingBottom:12,marginBottom:12}}>
+              <div className="patient-avatar" style={{background:"var(--sage-light)",color:"var(--sage-dark)"}}>🧾</div>
+              <div className="patient-info" style={{flex:1}}>
+                <div className="patient-name">{r.patient_name}</div>
+                <div className="patient-meta">
+                  📅 {dateStr} ⏰ {timeStr}
+                  {r.method && ` · ${r.method}`}
+                  {r.note && ` · ${r.note}`}
+                </div>
+                {r.receipt_number && (
+                  <div style={{fontSize:"0.72rem",color:"var(--text-soft)",marginTop:2}}>
+                    קבלה מס׳ {r.receipt_number}
+                  </div>
+                )}
+              </div>
+              <div style={{fontWeight:600,color:"var(--sage-dark)",fontSize:"0.95rem"}}>
+                ₪{r.amount}
+              </div>
             </div>
-            <span style={{fontSize:"0.72rem",padding:"4px 10px",borderRadius:20,fontWeight:500,background:"#E8F5E8",color:"#2E7D32"}}>✅ שולם</span>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </>
   );
