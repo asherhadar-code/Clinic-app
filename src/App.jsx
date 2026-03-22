@@ -215,6 +215,53 @@ h1,h2,h3,h4 { font-family: 'Fraunces', serif; font-weight: 300; }
   max-height: 100vh;
 }
 
+/* ── Mobile ── */
+@media (max-width: 600px) {
+  .app { flex-direction: column; }
+  .sidebar {
+    width: 100%; height: 60px;
+    flex-direction: row;
+    padding: 0;
+    justify-content: space-around;
+    align-items: center;
+    position: fixed; bottom: 0; right: 0;
+    z-index: 200;
+    order: 2;
+  }
+  .sidebar-logo { display: none; }
+  .nav-item {
+    flex-direction: column; gap: 2px;
+    padding: 6px 4px;
+    font-size: 0.6rem;
+    flex: 1; text-align: center;
+    border-right: none;
+    border-top: 3px solid transparent;
+  }
+  .nav-item.active {
+    border-right: none;
+    border-top: 3px solid var(--sage-light);
+    background: rgba(255,255,255,0.15);
+  }
+  .nav-icon { font-size: 1.3rem; }
+  .main {
+    padding: 16px 14px;
+    max-height: calc(100vh - 60px);
+    order: 1;
+  }
+  .stats-grid { grid-template-columns: repeat(2, 1fr) !important; gap: 10px !important; }
+  .stat-card { padding: 14px !important; }
+  .stat-num { font-size: 1.5rem !important; }
+  .card { padding: 14px !important; }
+  .patient-row { flex-wrap: wrap; gap: 6px; }
+  .modal-box { width: 96vw !important; max-height: 88vh; overflow-y: auto; margin: auto; }
+  .page-title { font-size: 1.4rem !important; margin-bottom: 16px !important; }
+  .ai-quick-btns { gap: 4px; }
+  .ai-quick-btn { font-size: 0.7rem !important; padding: 4px 8px !important; }
+  .week-grid { overflow-x: auto; }
+  .btn { font-size: 0.78rem !important; padding: 8px 12px !important; }
+  .btn-sm { font-size: 0.7rem !important; padding: 4px 8px !important; }
+}
+
 .page-title {
   font-size: 2rem;
   color: var(--sage-dark);
