@@ -791,6 +791,32 @@ export default function App() {
   const [page, setPage] = useState("dashboard");
   const [patients, setPatients] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [settings, setSettings] = useState({
+    clinicName: "",
+    therapistName: "",
+    phone: "",
+    email: "",
+    address: "",
+    defaultPrice: "",
+    defaultDuration: "45",
+    workDays: [0,1,2,3,4],
+    dayStart: "08:30",
+    reminderHour: "17:00",
+    reminderTemplate: "שלום {שם}, מתזכרת לך לגבי הטיפול מחר בשעה {שעה}. אשמח לאישור הגעה 🙏",
+    giKey: "",
+    giSecret: "",
+    greenInstanceId: "",
+    greenToken: "",
+    logoUrl: "",
+  });
+
+  const saveSetting = (key, value) => {
+    setSettings(prev => {
+      const updated = { ...prev, [key]: value };
+      localStorage.setItem("clinicSettings", JSON.stringify(updated));
+      return updated;
+    });
+  };
   const [appointments, setAppointments] = useState([]);
   const [patientModal, setPatientModal] = useState(null);
   const [editingPatient, setEditingPatient] = useState(null);
@@ -995,6 +1021,15 @@ export default function App() {
     setAiText(""); setSessionNote("");
     setModal(type);
     if (type === "pre_session") generatePreSession(patient);
+    if (type === "receipt") {
+      setReceiptData({
+        amount: settings.defaultPrice || "",
+        method: "ביט",
+        note: "",
+        email: patient?.email || "",
+        phone: patient?.phone || ""
+      });
+    }
   };
 
   const closeModal = () => setModal(null);
@@ -1238,6 +1273,7 @@ ${styleExamples ? `להלן דוגמאות לסגנון הכתיבה של הקל
               onEdit={() => { setEditingPatient(selectedPatient); setPatientModal("edit"); }}
               onDelete={() => deletePatient(selectedPatient.id)} />}
           {page === "receipts" && <Receipts patients={patients} openModal={openModal} />}
+          {page === "settings" && <Settings settings={settings} saveSetting={saveSetting} />}
           {page === "documents_bank" && <DocumentsBank docBank={docBank} addDocToBank={addDocToBank} removeDocFromBank={removeDocFromBank} showNotification={showNotification} />}
         </main>
       </div>
@@ -1462,6 +1498,7 @@ function Sidebar({ page, setPage }) {
     { id:"patients",        icon:"👥", label:"מטופלים" },
     { id:"receipts",        icon:"🧾", label:"קבלות" },
     { id:"documents_bank",  icon:"📚", label:"מסמכים" },
+    { id:"settings",        icon:"⚙️", label:"הגדרות" },
   ];
   return (
     <aside className="sidebar">
@@ -2313,6 +2350,149 @@ function DocumentsBank({ docBank, addDocToBank, removeDocFromBank, showNotificat
               </div>
             ))}
           </div>
+        )}
+      </div>
+    </>
+  );
+}
+
+// ── Settings ──────────────────────────────────────────────────────
+function Settings({ settings, saveSetting }) {
+  const [activeTab, setActiveTab] = useState("clinic");
+  const [saved, setSaved] = useState(false);
+
+  const tabs = [
+    { id: "clinic",    label: "🏥 קליניקה" },
+    { id: "calendar",  label: "📅 יומן" },
+    { id: "payment",   label: "💳 תשלום" },
+    { id: "whatsapp",  label: "📱 וואטסאפ" },
+  ];
+
+  const handleSave = (key, value) => {
+    saveSetting(key, value);
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2000);
+  };
+
+  const Field = ({ label, settingKey, placeholder, type="text" }) => (
+    <div style={{marginBottom:16}}>
+      <div style={{fontSize:"0.8rem",color:"var(--text-soft)",marginBottom:5}}>{label}</div>
+      <input className="field" type={type} placeholder={placeholder}
+        defaultValue={settings[settingKey]}
+        onBlur={e => handleSave(settingKey, e.target.value)} />
+    </div>
+  );
+
+  return (
+    <>
+      <div className="top-bar">
+        <h1 className="page-title" style={{marginBottom:0}}>⚙️ הגדרות</h1>
+        {saved && <div style={{color:"var(--sage-dark)",fontWeight:500,fontSize:"0.85rem"}}>✅ נשמר!</div>}
+      </div>
+
+      {/* Tabs */}
+      <div style={{display:"flex",gap:4,marginBottom:20,background:"var(--warm)",borderRadius:12,padding:4}}>
+        {tabs.map(t => (
+          <div key={t.id} onClick={() => setActiveTab(t.id)}
+            style={{flex:1,textAlign:"center",padding:"10px 4px",borderRadius:10,cursor:"pointer",
+              fontSize:"0.8rem",fontWeight: activeTab===t.id ? 600 : 400,
+              background: activeTab===t.id ? "white" : "transparent",
+              color: activeTab===t.id ? "var(--sage-dark)" : "var(--text-soft)",
+              boxShadow: activeTab===t.id ? "0 1px 4px rgba(0,0,0,0.1)" : "none",
+              transition:"all 0.15s"}}>
+            {t.label}
+          </div>
+        ))}
+      </div>
+
+      <div className="card">
+        {/* Clinic tab */}
+        {activeTab === "clinic" && (
+          <>
+            <div style={{fontWeight:600,color:"var(--sage-dark)",marginBottom:16}}>פרטי הקליניקה</div>
+            <Field label="שם הקליניקה" settingKey="clinicName" placeholder="לדוגמה: קליניקת שמש" />
+            <Field label="שם המטפלת" settingKey="therapistName" placeholder="שם מלא" />
+            <Field label="טלפון" settingKey="phone" placeholder="050-0000000" type="tel" />
+            <Field label="מייל" settingKey="email" placeholder="clinic@gmail.com" type="email" />
+            <Field label="כתובת" settingKey="address" placeholder="רחוב, עיר" />
+            <div style={{marginBottom:16}}>
+              <div style={{fontSize:"0.8rem",color:"var(--text-soft)",marginBottom:5}}>לוגו (קישור לתמונה)</div>
+              <input className="field" placeholder="https://..." defaultValue={settings.logoUrl}
+                onBlur={e => handleSave("logoUrl", e.target.value)} />
+              {settings.logoUrl && (
+                <img src={settings.logoUrl} alt="לוגו" style={{width:80,height:80,objectFit:"contain",marginTop:8,borderRadius:8,border:"1px solid var(--warm)"}} />
+              )}
+            </div>
+          </>
+        )}
+
+        {/* Calendar tab */}
+        {activeTab === "calendar" && (
+          <>
+            <div style={{fontWeight:600,color:"var(--sage-dark)",marginBottom:16}}>הגדרות יומן</div>
+            <div style={{marginBottom:16}}>
+              <div style={{fontSize:"0.8rem",color:"var(--text-soft)",marginBottom:8}}>ימי עבודה</div>
+              <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+                {["ראשון","שני","שלישי","רביעי","חמישי","שישי","שבת"].map((day,i) => (
+                  <div key={i} onClick={() => {
+                    const days = settings.workDays.includes(i)
+                      ? settings.workDays.filter(d => d !== i)
+                      : [...settings.workDays, i];
+                    handleSave("workDays", days);
+                  }} style={{padding:"6px 14px",borderRadius:20,cursor:"pointer",fontSize:"0.82rem",
+                    background: settings.workDays.includes(i) ? "var(--sage-dark)" : "var(--warm)",
+                    color: settings.workDays.includes(i) ? "white" : "var(--text-soft)",
+                    transition:"all 0.15s"}}>
+                    {day}
+                  </div>
+                ))}
+              </div>
+              <div style={{fontSize:"0.75rem",color:"var(--text-soft)",marginTop:8}}>
+                שעת התחלה ומשך טיפול ניתנים לעריכה ישירות ביומן
+              </div>
+            </div>
+          </>
+        )}
+
+        {/* Payment tab */}
+        {activeTab === "payment" && (
+          <>
+            <div style={{fontWeight:600,color:"var(--sage-dark)",marginBottom:16}}>הגדרות תשלום</div>
+            <Field label="מחיר ברירת מחדל לטיפול (₪)" settingKey="defaultPrice" placeholder="350" type="number" />
+            <div style={{marginTop:20,padding:14,background:"var(--cream)",borderRadius:12}}>
+              <div style={{fontWeight:500,marginBottom:12,color:"var(--sage-dark)"}}>🧾 חשבונית ירוקה</div>
+              <Field label="API Key" settingKey="giKey" placeholder="מפתח API" />
+              <Field label="API Secret" settingKey="giSecret" placeholder="סיסמת API" />
+              {settings.giKey && <div style={{fontSize:"0.75rem",color:"var(--sage-dark)"}}>✅ מחובר</div>}
+            </div>
+          </>
+        )}
+
+        {/* WhatsApp tab */}
+        {activeTab === "whatsapp" && (
+          <>
+            <div style={{fontWeight:600,color:"var(--sage-dark)",marginBottom:16}}>הגדרות וואטסאפ</div>
+            <div style={{padding:14,background:"var(--cream)",borderRadius:12,marginBottom:16}}>
+              <div style={{fontWeight:500,marginBottom:12,color:"var(--sage-dark)"}}>📱 Green API</div>
+              <Field label="Instance ID" settingKey="greenInstanceId" placeholder="1234567890" />
+              <Field label="API Token" settingKey="greenToken" placeholder="טוקן" />
+              {settings.greenInstanceId && settings.greenToken &&
+                <div style={{fontSize:"0.75rem",color:"var(--sage-dark)"}}>✅ מחובר</div>}
+            </div>
+            <div style={{marginBottom:16}}>
+              <div style={{fontSize:"0.8rem",color:"var(--text-soft)",marginBottom:5}}>שעת שליחת תזכורות</div>
+              <input className="field" type="time" defaultValue={settings.reminderHour}
+                onBlur={e => handleSave("reminderHour", e.target.value)} />
+            </div>
+            <div>
+              <div style={{fontSize:"0.8rem",color:"var(--text-soft)",marginBottom:5}}>תבנית הודעת תזכורת</div>
+              <textarea className="field" rows={3} defaultValue={settings.reminderTemplate}
+                onBlur={e => handleSave("reminderTemplate", e.target.value)} />
+              <div style={{fontSize:"0.72rem",color:"var(--text-soft)",marginTop:4}}>
+                משתנים: {"{שם}"} {"{שעה}"} {"{תאריך}"}
+              </div>
+            </div>
+          </>
         )}
       </div>
     </>
