@@ -1,0 +1,22 @@
+{
+  "name": "קליניקה — ניהול מטופלים",
+  "short_name": "קליניקה",
+  "description": "מערכת ניהול קליניקה חכמה",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#F7F3EE",
+  "theme_color": "#5A7A5A",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "https://via.placeholder.com/192x192/5A7A5A/FFFFFF?text=K",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "https://via.placeholder.com/512x512/5A7A5A/FFFFFF?text=K",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
