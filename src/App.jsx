@@ -1262,7 +1262,7 @@ ${styleExamples ? `להלן דוגמאות לסגנון הכתיבה של הקל
           {notification && <div className="banner">🔔 {notification}</div>}
 
           {page === "dashboard" && <Dashboard patients={patients} appointments={appointments} openModal={openModal} sendWhatsApp={sendWhatsApp} />}
-          {page === "calendar" && <Calendar patients={patients} appointments={appointments} setAppointments={setAppointments} openModal={openModal} sendWhatsApp={sendWhatsApp} />}
+          {page === "calendar" && <Calendar patients={patients} appointments={appointments} setAppointments={setAppointments} openModal={openModal} sendWhatsApp={sendWhatsApp} settings={settings} />}
           {page === "patients" && !selectedPatient &&
             <PatientList patients={patients} onSelect={p => { setSelectedPatient(p); setPage("patient_detail"); }}
               onAdd={() => setPatientModal("add")} />}
@@ -1602,7 +1602,7 @@ function Dashboard({ patients, appointments, openModal, sendWhatsApp }) {
 // Each day has an ordered list of "blocks": { type:"treatment"|"break", minutes, patientId?, patientName?, status? }
 // The schedule is built by walking blocks sequentially from dayStart.
 
-function Calendar({ patients, appointments, setAppointments, openModal, sendWhatsApp }) {
+function Calendar({ patients, appointments, setAppointments, openModal, sendWhatsApp, settings }) {
   const [dayStart, setDayStart] = useState("08:30");
   const [dayEnd,   setDayEnd]   = useState("14:30");
 
@@ -1720,7 +1720,7 @@ function Calendar({ patients, appointments, setAppointments, openModal, sendWhat
       </div>
 
       <div style={{display:"flex",gap:10,overflowX:"auto",paddingBottom:8}}>
-        {WEEK_DAYS.map((day, di) => {
+        {WEEK_DAYS.map((day, di) => { if (settings?.workDays && !settings.workDays.includes(di)) return null;
           const timeline = buildTimeline(di);
           return (
             <div key={di} style={{minWidth:150,flex:1,background:"var(--white)",borderRadius:16,padding:12,boxShadow:"var(--shadow)"}}>
