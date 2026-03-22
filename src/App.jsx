@@ -125,7 +125,7 @@ const sb = {
     const res = await fetch(`${SUPABASE_URL}/rest/v1/document_bank`, {
       method: "POST",
       headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json", Prefer: "return=representation" },
-      body: JSON.stringify({ category: doc.category, name: doc.name, size: doc.size, date: doc.date })
+      body: JSON.stringify({ category: doc.category, name: doc.name, size: doc.size, date: doc.date, extracted_text: doc.extracted_text || null })
     });
     const data = await res.json();
     return Array.isArray(data) ? data[0] : data;
@@ -860,15 +860,52 @@ export default function App() {
     diagnosis: [],    // אבחונים
   });
 
-  const addDocToBank = async (category, doc) => {
+  const extractTextFromFile = async (file) => {
     try {
-      const saved = await sb.addDocumentBank({ ...doc, category });
+      const reader = new FileReader();
+      return await new Promise((resolve) => {
+        reader.onload = async (e) => {
+          const base64 = e.target.result.split(",")[1];
+          const mediaType = file.name.endsWith(".pdf") ? "application/pdf" : "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+          try {
+            const res = await fetch("/api/ai", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                max_tokens: 3000,
+                messages: [{
+                  role: "user",
+                  content: [
+                    { type: "document", source: { type: "base64", media_type: mediaType, data: base64 } },
+                    { type: "text", text: "חלץ את כל הטקסט מהמסמך הזה. כתוב את הטקסט המלא ללא שינויים, שמור על המבנה המקורי." }
+                  ]
+                }]
+              })
+            });
+            const data = await res.json();
+            resolve(data.text || "");
+          } catch { resolve(""); }
+        };
+        reader.readAsDataURL(file);
+      });
+    } catch { return ""; }
+  };
+
+  const addDocToBank = async (category, doc, file) => {
+    try {
+      let extracted_text = "";
+      if (file) {
+        showNotification("📖 קורא מסמך...");
+        extracted_text = await extractTextFromFile(file);
+      }
+      const saved = await sb.addDocumentBank({ ...doc, category, extracted_text });
       if (saved && saved.id) {
         setDocBank(prev => ({ ...prev, [category]: [...prev[category], { ...saved }] }));
+        showNotification("✅ מסמך נשמר" + (extracted_text ? " ונקרא בהצלחה" : ""));
       }
     } catch {
-      // fallback: add locally
       setDocBank(prev => ({ ...prev, [category]: [...prev[category], doc] }));
+      showNotification("✅ מסמך נשמר");
     }
   };
 
@@ -1054,8 +1091,13 @@ export default function App() {
     setModal("ai_chat");
   };
 
-  const sendAiChat = async (customMsg) => {
+  const sendAiChat = async (customMsg, docCategory) => {
     const msg = customMsg || aiChatInput.trim();
+    // Auto-detect document category from message
+    const autoCategory = docCategory ||
+      (/סיום|discharge|סיכום טיפול/.test(msg) ? "discharge" :
+       /המשך|continuation|הפניה/.test(msg) ? "continuation" :
+       /אבחון|diagnosis|הערכה/.test(msg) ? "diagnosis" : null);
     if (!msg || aiChatLoading) return;
     setAiChatInput("");
     const newMessages = [...aiChatMessages, { role: "user", text: msg }];
@@ -1063,6 +1105,19 @@ export default function App() {
     setAiChatLoading(true);
     const patient = aiChatPatient;
     const history = (patient.history || []).map(h => `${h.date}: ${h.summary}`).join("\n");
+    // Get style examples from document bank - filter by category if specified
+    const catDocs = autoCategory && docBank?.[autoCategory]
+      ? docBank[autoCategory]
+      : [...(docBank?.continuation||[]), ...(docBank?.discharge||[]), ...(docBank?.diagnosis||[])];
+    const styleExamples = catDocs
+      .filter(d => d.extracted_text)
+      .slice(0, 3)
+      .map(d => `--- דוגמה מ"${d.name}" ---\n${d.extracted_text?.slice(0, 800)}`)
+      .join("\n\n");
+    const catLabel = autoCategory === "discharge" ? "דוח סיום טיפול" :
+                     autoCategory === "continuation" ? "בקשה להמשך טיפול" :
+                     autoCategory === "diagnosis" ? "דוח אבחון" : "דוח";
+
     const systemPrompt = `את עוזרת AI חכמה לקלינאית תקשורת. להלן פרטי המטופל:
 שם: ${patient.name}
 גיל: ${patient.age}
@@ -1071,7 +1126,9 @@ export default function App() {
 היסטוריית טיפולים:
 ${history || "אין עדיין סיכומי טיפולים"}
 
-ענה בעברית בסגנון מקצועי וחם. אם מתבקש דוח — כתוב בסגנון קלינאית תקשורת מנוסה.`;
+${styleExamples ? `להלן דוגמאות לסגנון הכתיבה של הקלינאית עבור ${catLabel} — השתמשי בסגנון זה בדיוק:\n${styleExamples}` : ""}
+
+ענה בעברית בסגנון מקצועי וחם. אם מתבקש דוח — חקי את סגנון הכתיבה של הדוגמאות.`;
     try {
       const res = await fetch("/api/ai", {
         method: "POST",
@@ -1134,7 +1191,7 @@ ${history || "אין עדיין סיכומי טיפולים"}
               onEdit={() => { setEditingPatient(selectedPatient); setPatientModal("edit"); }}
               onDelete={() => deletePatient(selectedPatient.id)} />}
           {page === "receipts" && <Receipts patients={patients} openModal={openModal} />}
-          {page === "documents_bank" && <DocumentsBank docBank={docBank} addDocToBank={addDocToBank} removeDocFromBank={removeDocFromBank} />}
+          {page === "documents_bank" && <DocumentsBank docBank={docBank} addDocToBank={addDocToBank} removeDocFromBank={removeDocFromBank} showNotification={showNotification} />}
         </main>
       </div>
 
@@ -1313,14 +1370,15 @@ ${history || "אין עדיין סיכומי טיפולים"}
           {/* Quick action buttons */}
           <div className="ai-quick-btns">
             {[
-              "סכם את כל הטיפולים",
-              "מה ההתקדמות?",
-              "כתוב דוח רשמי",
-              "המלצות לטיפול הבא",
-              "דפוסים חוזרים",
-              "נקודות לחיזוק"
+              { label: "סכם טיפולים", msg: "סכם את כל הטיפולים עד כה", cat: null },
+              { label: "מה ההתקדמות?", msg: "מה ההתקדמות מתחילת הטיפול?", cat: null },
+              { label: "📄 דוח סיום", msg: "כתוב דוח סיום טיפול מקצועי", cat: "discharge" },
+              { label: "📋 בקשה להמשך", msg: "כתוב בקשה להמשך טיפול", cat: "continuation" },
+              { label: "🔍 דוח אבחון", msg: "כתוב דוח אבחון", cat: "diagnosis" },
+              { label: "המלצות", msg: "מה ההמלצות לטיפול הבא?", cat: null },
             ].map(q => (
-              <button key={q} className="ai-quick-btn" onClick={() => sendAiChat(q)}>{q}</button>
+              <button key={q.label} className="ai-quick-btn"
+                onClick={() => sendAiChat(q.msg, q.cat)}>{q.label}</button>
             ))}
           </div>
 
@@ -2072,7 +2130,7 @@ function PatientFormModal({ mode, patient, onSave, onClose }) {
 }
 
 // ── Documents Bank ────────────────────────────────────────────────
-function DocumentsBank({ docBank, addDocToBank, removeDocFromBank }) {
+function DocumentsBank({ docBank, addDocToBank, removeDocFromBank, showNotification }) {
   const [activeTab, setActiveTab] = useState("continuation");
   const [analyzing, setAnalyzing] = useState(false);
   const [styleNote, setStyleNote] = useState("");
@@ -2092,7 +2150,7 @@ function DocumentsBank({ docBank, addDocToBank, removeDocFromBank }) {
         date: new Date().toLocaleDateString("he-IL"),
         size,
         type: file.name.split(".").pop().toLowerCase(),
-      });
+      }, file);
     });
   };
 
