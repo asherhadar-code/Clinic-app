@@ -95,7 +95,15 @@ const sb = {
     const res = await fetch(`${SUPABASE_URL}/rest/v1/appointments`, {
       method: "POST",
       headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json", Prefer: "return=representation" },
-      body: JSON.stringify({ patient_id: apt.patientId, patient_name: apt.patientName, day_index: apt.dayIndex, start_time: apt.startTime, status: "pending" })
+      body: JSON.stringify({ 
+        patient_id: apt.patientId || null, 
+        patient_name: apt.patientName || null, 
+        day_index: apt.dayIndex, 
+        start_time: apt.startTime || "00:00", 
+        status: apt.status || "pending",
+        block_type: apt.blockType || "treatment",
+        minutes: apt.minutes || 45
+      })
     });
     const data = await res.json();
     return Array.isArray(data) ? data[0] : data;
@@ -802,7 +810,7 @@ export default function App() {
     workDays: [0,1,2,3,4],
     dayStart: "08:30",
     reminderHour: "17:00",
-    reminderTemplate: "שלום {שם}, מתזכרת לך לגבי הטיפול מחר בשעה {שעה}. אשמח לאישור הגעה 🙏",
+    reminderTemplate: "שלום {שם} 😊\nמתזכרת לך לטיפול מחר {תאריך} בשעה {שעה}.\nאשמח לאישור הגעה:\n1️⃣ כן, אגיע\n2️⃣ לא אוכל להגיע",
     giKey: "",
     giSecret: "",
     greenInstanceId: "",
@@ -1610,22 +1618,25 @@ function Calendar({ patients, appointments, setAppointments, openModal, sendWhat
   const makeId = () => Math.random().toString(36).slice(2,8);
   const [localBreaks, setLocalBreaks] = useState({});
 
-  // Build dayBlocks from appointments + localBreaks
+  // Build dayBlocks from appointments (includes breaks)
   const buildDayBlocks = () => {
     const blocks = {};
     (appointments || []).forEach(a => {
       const di = a.day_index;
       if (!blocks[di]) blocks[di] = [];
-      blocks[di].push({ id: a.id, type: "treatment", minutes: 45, patientId: a.patient_id, patientName: a.patient_name, status: a.status || "pending" });
+      blocks[di].push({ 
+        id: a.id, 
+        type: a.block_type || "treatment", 
+        minutes: a.minutes || 45, 
+        patientId: a.patient_id, 
+        patientName: a.patient_name, 
+        status: a.status || "pending",
+        startTime: a.start_time || "00:00"
+      });
     });
-    // Add local breaks
-    Object.entries(localBreaks).forEach(([di, bArr]) => {
-      if (!blocks[di]) blocks[di] = [];
-      bArr.forEach(b => blocks[di].push(b));
-    });
-    // Sort by start time
+    // Sort by start_time from DB
     Object.keys(blocks).forEach(di => {
-      blocks[di].sort((a,b) => (a.startTime||"") > (b.startTime||"") ? 1 : -1);
+      blocks[di].sort((a,b) => a.startTime > b.startTime ? 1 : -1);
     });
     return blocks;
   };
@@ -1652,24 +1663,49 @@ function Calendar({ patients, appointments, setAppointments, openModal, sendWhat
     });
   };
 
-  const addBlock = (dayIdx, insertAfterIdx) => {
+  const addBlock = async (dayIdx, insertAfterIdx) => {
     if (addType === "break") {
-      const block = { id: makeId(), type: "break", minutes: breakMins };
-      setLocalBreaks(prev => ({
-        ...prev,
-        [dayIdx]: [...(prev[dayIdx] || []), block]
-      }));
+      // Calculate start time based on position
+      const timeline = buildTimeline(dayIdx);
+      const insertAfter = timeline[insertAfterIdx];
+      const startTime = insertAfter ? insertAfter.endTime : dayStart;
+      try {
+        const newApt = await sb.addAppointment({
+          dayIndex: dayIdx,
+          startTime,
+          blockType: "break",
+          minutes: breakMins,
+          status: "break"
+        });
+        if (newApt && newApt.id) {
+          setAppointments(prev => [...prev, { 
+            ...newApt, 
+            day_index: dayIdx, 
+            block_type: "break", 
+            minutes: breakMins,
+            start_time: startTime,
+            status: "break"
+          }]);
+        }
+      } catch(e) {
+        console.error("Error adding break:", e);
+      }
       setAddModal(null);
     }
   };
 
   const assignPatientToModal = async (patient) => {
     try {
+      const timeline = buildTimeline(addModal.dayIdx);
+      const insertAfter = timeline[addModal.insertAfterIdx];
+      const startTime = insertAfter ? insertAfter.endTime : dayStart;
       const newApt = await sb.addAppointment({
         patientId: patient.id,
         patientName: patient.name,
         dayIndex: addModal.dayIdx,
-        startTime: "00:00", // will be calculated from position
+        startTime,
+        blockType: "treatment",
+        minutes: 45,
       });
       if (newApt && newApt.id) {
         setAppointments(prev => [...prev, { ...newApt, day_index: addModal.dayIdx, patient_name: patient.name, patient_id: patient.id, status: "pending" }]);
