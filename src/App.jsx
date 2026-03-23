@@ -159,6 +159,27 @@ const sb = {
       headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json" },
       body: JSON.stringify({ patient_id: r.patientId, patient_name: r.patientName, amount: r.amount, method: r.method, note: r.note, receipt_number: r.receiptNumber })
     });
+  },
+  async getSettings() {
+    if (!SUPABASE_URL || !SUPABASE_KEY) return {};
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/settings?select=key,value`, {
+      headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` }
+    });
+    if (!res.ok) return {};
+    const data = await res.json();
+    const obj = {};
+    (Array.isArray(data) ? data : []).forEach(row => {
+      try { obj[row.key] = JSON.parse(row.value); } catch { obj[row.key] = row.value; }
+    });
+    return obj;
+  },
+  async saveSetting(key, value) {
+    if (!SUPABASE_URL || !SUPABASE_KEY) return;
+    await fetch(`${SUPABASE_URL}/rest/v1/settings`, {
+      method: "POST",
+      headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json", Prefer: "resolution=merge-duplicates" },
+      body: JSON.stringify({ key, value: JSON.stringify(value) })
+    });
   }
 };
 const GI_KEY    = import.meta.env.VITE_GI_KEY || "";
@@ -835,11 +856,8 @@ export default function App() {
   });
 
   const saveSetting = (key, value) => {
-    setSettings(prev => {
-      const updated = { ...prev, [key]: value };
-      localStorage.setItem("clinicSettings", JSON.stringify(updated));
-      return updated;
-    });
+    setSettings(prev => ({ ...prev, [key]: value }));
+    sb.saveSetting(key, value).catch(() => {});
   };
   const [appointments, setAppointments] = useState([]);
   const [receiptsHistory, setReceiptsHistory] = useState([]);
@@ -848,8 +866,8 @@ export default function App() {
 
   // Load patients, appointments and document bank from Supabase on startup
   useEffect(() => {
-    Promise.all([sb.getPatients(), sb.getAppointments(), sb.getDocumentBank(), sb.getReceipts()])
-      .then(([pData, aData, dData, rData]) => {
+    Promise.all([sb.getPatients(), sb.getAppointments(), sb.getDocumentBank(), sb.getReceipts(), sb.getSettings()])
+      .then(([pData, aData, dData, rData, sData]) => {
         setPatients(Array.isArray(pData) ? pData : []);
         setAppointments(Array.isArray(aData) ? aData : []);
         // Build docBank from flat array
@@ -859,6 +877,9 @@ export default function App() {
         });
         setDocBank(bank);
         setReceiptsHistory(Array.isArray(rData) ? rData : []);
+        if (sData && Object.keys(sData).length > 0) {
+          setSettings(prev => ({ ...prev, ...sData }));
+        }
         setLoading(false);
       })
       .catch(err => {
