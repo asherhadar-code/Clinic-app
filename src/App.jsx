@@ -2496,86 +2496,85 @@ function DocumentsBank({ docBank, addDocToBank, removeDocFromBank, showNotificat
 // ── Finance ───────────────────────────────────────────────────────
 function Finance({ receiptsHistory, appointments }) {
   const today = new Date();
+  const fmt = d => d.toISOString().split("T")[0]; // YYYY-MM-DD for input
 
-  // Period selector
-  const [periodType, setPeriodType] = useState("month"); // month | custom | year
-  const [startDay, setStartDay] = useState(1);
+  // Period
+  const [startDate, setStartDate] = useState(fmt(new Date(today.getFullYear(), today.getMonth(), 1)));
+  const [endDate, setEndDate] = useState(fmt(today));
+
+  // Average period
+  const [avgMode, setAvgMode] = useState("months"); // months | custom
   const [monthsBack, setMonthsBack] = useState(6);
-  const [selectedYear, setSelectedYear] = useState(today.getFullYear());
+  const [avgStart, setAvgStart] = useState(fmt(new Date(today.getFullYear(), today.getMonth() - 5, 1)));
+  const [avgEnd, setAvgEnd] = useState(fmt(today));
 
-  // Build list of months for average calculation
-  const getMonthsData = () => {
-    const months = [];
-    for (let i = monthsBack - 1; i >= 0; i--) {
-      const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
-      const label = d.toLocaleDateString("he-IL", { month: "long", year: "numeric" });
-      const start = new Date(d.getFullYear(), d.getMonth(), startDay);
-      const end = new Date(d.getFullYear(), d.getMonth() + 1, startDay - 1);
-      const income = (receiptsHistory || [])
-        .filter(r => {
-          const rd = new Date(r.created_at);
-          return rd >= start && rd <= end;
-        })
-        .reduce((sum, r) => sum + (parseFloat(r.amount) || 0), 0);
-      // Cancellations = appointments with status "cancelled" in this period
-      const totalApts = (appointments || []).filter(a => {
-        if (!a.created_at) return false;
-        const ad = new Date(a.created_at);
-        return ad >= start && ad <= end && a.block_type !== "break";
-      }).length;
-      const cancelled = (appointments || []).filter(a => {
-        if (!a.created_at) return false;
-        const ad = new Date(a.created_at);
-        return ad >= start && ad <= end && a.status === "cancelled";
-      }).length;
-      months.push({ label, income, totalApts, cancelled });
-    }
-    return months;
-  };
+  const toHe = d => new Date(d).toLocaleDateString("he-IL");
 
-  // Current period income
-  const getCurrentPeriod = () => {
-    const now = new Date();
-    let start, end;
-    if (periodType === "year") {
-      start = new Date(selectedYear, 0, 1);
-      end = new Date(selectedYear, 11, 31);
-    } else {
-      // month or custom — use startDay
-      if (now.getDate() >= startDay) {
-        start = new Date(now.getFullYear(), now.getMonth(), startDay);
-        end = new Date(now.getFullYear(), now.getMonth() + 1, startDay - 1);
-      } else {
-        start = new Date(now.getFullYear(), now.getMonth() - 1, startDay);
-        end = new Date(now.getFullYear(), now.getMonth(), startDay - 1);
-      }
-    }
-    return { start, end };
-  };
-
-  const { start, end } = getCurrentPeriod();
+  // Filter receipts by period
   const periodReceipts = (receiptsHistory || []).filter(r => {
-    const rd = new Date(r.created_at);
-    return rd >= start && rd <= end;
+    const rd = fmt(new Date(r.created_at));
+    return rd >= startDate && rd <= endDate;
   });
 
   const totalIncome = periodReceipts.reduce((s, r) => s + (parseFloat(r.amount) || 0), 0);
   const vat = Math.round(totalIncome * 0.18);
   const netIncome = totalIncome - vat;
 
+  // Monthly chart data (last monthsBack months or custom range)
+  const getMonthsData = () => {
+    let months = [];
+    if (avgMode === "custom") {
+      // Build months between avgStart and avgEnd
+      let d = new Date(avgStart);
+      const endD = new Date(avgEnd);
+      while (d <= endD) {
+        const y = d.getFullYear(), m = d.getMonth();
+        const mStart = fmt(new Date(y, m, 1));
+        const mEnd = fmt(new Date(y, m + 1, 0));
+        const label = new Date(y, m, 1).toLocaleDateString("he-IL", { month: "short", year: "2-digit" });
+        const income = (receiptsHistory || [])
+          .filter(r => { const rd = fmt(new Date(r.created_at)); return rd >= mStart && rd <= mEnd; })
+          .reduce((s, r) => s + (parseFloat(r.amount) || 0), 0);
+        const totalApts = (appointments || []).filter(a => {
+          if (!a.start_time) return false;
+          return a.day_index !== undefined && a.block_type !== "break";
+        }).length;
+        months.push({ label, income, totalApts, cancelled: 0 });
+        d = new Date(y, m + 1, 1);
+      }
+    } else {
+      for (let i = monthsBack - 1; i >= 0; i--) {
+        const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
+        const y = d.getFullYear(), m = d.getMonth();
+        const mStart = fmt(new Date(y, m, 1));
+        const mEnd = fmt(new Date(y, m + 1, 0));
+        const label = d.toLocaleDateString("he-IL", { month: "short", year: "2-digit" });
+        const income = (receiptsHistory || [])
+          .filter(r => { const rd = fmt(new Date(r.created_at)); return rd >= mStart && rd <= mEnd; })
+          .reduce((s, r) => s + (parseFloat(r.amount) || 0), 0);
+        months.push({ label, income });
+      }
+    }
+    return months;
+  };
+
   const monthsData = getMonthsData();
   const avgIncome = monthsData.length > 0
     ? Math.round(monthsData.reduce((s, m) => s + m.income, 0) / monthsData.length)
     : 0;
 
-  const totalCancelled = monthsData.reduce((s, m) => s + m.cancelled, 0);
-  const totalApts = monthsData.reduce((s, m) => s + m.totalApts, 0);
-  const cancelRate = totalApts > 0 ? Math.round((totalCancelled / totalApts) * 100) : 0;
+  // Cancellations from appointments
+  const totalApts = (appointments || []).filter(a => a.block_type !== "break").length;
+  const cancelled = (appointments || []).filter(a => a.status === "cancelled").length;
+  const cancelRate = totalApts > 0 ? Math.round((cancelled / totalApts) * 100) : 0;
 
   const maxIncome = Math.max(...monthsData.map(m => m.income), 1);
 
-  const startStr = start.toLocaleDateString("he-IL");
-  const endStr = end.toLocaleDateString("he-IL");
+  const inputStyle = {
+    padding:"7px 10px", border:"2px solid var(--warm)", borderRadius:10,
+    fontFamily:"DM Sans,sans-serif", fontSize:"0.85rem", background:"var(--cream)",
+    outline:"none", cursor:"pointer"
+  };
 
   return (
     <>
@@ -2583,43 +2582,21 @@ function Finance({ receiptsHistory, appointments }) {
 
       {/* Period selector */}
       <div className="card" style={{marginBottom:16}}>
-        <div style={{fontWeight:600,color:"var(--sage-dark)",marginBottom:12}}>⚙️ בחר תקופה</div>
-        <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:12}}>
-          {[{id:"month",label:"חודשי"},{id:"year",label:"שנתי"},{id:"custom",label:"מותאם אישית"}].map(p => (
-            <div key={p.id} onClick={() => setPeriodType(p.id)}
-              style={{padding:"6px 14px",borderRadius:20,cursor:"pointer",fontSize:"0.82rem",
-                background: periodType===p.id ? "var(--sage-dark)" : "var(--warm)",
-                color: periodType===p.id ? "white" : "var(--text-soft)",transition:"all 0.15s"}}>
-              {p.label}
-            </div>
-          ))}
+        <div style={{fontWeight:600,color:"var(--sage-dark)",marginBottom:14}}>📅 בחר תקופה לחישוב</div>
+        <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+          <div style={{display:"flex",alignItems:"center",gap:6}}>
+            <span style={{fontSize:"0.82rem",color:"var(--text-soft)"}}>מיום:</span>
+            <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} style={inputStyle} />
+          </div>
+          <span style={{color:"var(--text-soft)"}}>—</span>
+          <div style={{display:"flex",alignItems:"center",gap:6}}>
+            <span style={{fontSize:"0.82rem",color:"var(--text-soft)"}}>עד יום:</span>
+            <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} style={inputStyle} />
+          </div>
         </div>
-
-        {periodType !== "year" && (
-          <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
-            <span style={{fontSize:"0.82rem",color:"var(--text-soft)"}}>יום התחלת תקופה:</span>
-            <input type="number" min="1" max="28" value={startDay}
-              onChange={e => setStartDay(parseInt(e.target.value)||1)}
-              style={{width:60,padding:"6px 10px",border:"2px solid var(--warm)",borderRadius:10,
-                fontFamily:"DM Sans,sans-serif",fontSize:"0.85rem",background:"var(--cream)"}} />
-            <span style={{fontSize:"0.75rem",color:"var(--text-soft)"}}>
-              תקופה: {startStr} — {endStr}
-            </span>
-          </div>
-        )}
-
-        {periodType === "year" && (
-          <div style={{display:"flex",alignItems:"center",gap:10}}>
-            <span style={{fontSize:"0.82rem",color:"var(--text-soft)"}}>שנה:</span>
-            <select value={selectedYear} onChange={e => setSelectedYear(parseInt(e.target.value))}
-              style={{padding:"6px 10px",border:"2px solid var(--warm)",borderRadius:10,
-                fontFamily:"DM Sans,sans-serif",fontSize:"0.85rem",background:"var(--cream)"}}>
-              {[0,1,2].map(i => (
-                <option key={i} value={today.getFullYear()-i}>{today.getFullYear()-i}</option>
-              ))}
-            </select>
-          </div>
-        )}
+        <div style={{fontSize:"0.75rem",color:"var(--text-soft)",marginTop:8}}>
+          תקופה נבחרת: {toHe(startDate)} — {toHe(endDate)}
+        </div>
       </div>
 
       {/* Main stats */}
@@ -2647,16 +2624,33 @@ function Finance({ receiptsHistory, appointments }) {
         <div className="card" style={{textAlign:"center"}}>
           <div style={{fontSize:"0.8rem",color:"var(--text-soft)",marginBottom:6}}>ממוצע חודשי</div>
           <div style={{fontSize:"1.8rem",fontWeight:600,color:"var(--sage-dark)"}}>₪{avgIncome.toLocaleString()}</div>
-          <div style={{fontSize:"0.72rem",color:"var(--text-soft)",marginTop:4}}>
-            מבוסס על {monthsBack} חודשים אחרונים
-          </div>
-          <div style={{display:"flex",alignItems:"center",gap:6,justifyContent:"center",marginTop:8}}>
-            <span style={{fontSize:"0.75rem",color:"var(--text-soft)"}}>חודשים לחישוב:</span>
-            <select value={monthsBack} onChange={e => setMonthsBack(parseInt(e.target.value))}
-              style={{padding:"3px 6px",border:"1px solid var(--warm)",borderRadius:8,fontSize:"0.75rem",background:"var(--cream)"}}>
-              {[3,6,9,12,18].map(n => <option key={n} value={n}>{n}</option>)}
+          <div style={{display:"flex",alignItems:"center",gap:6,justifyContent:"center",marginTop:10,flexWrap:"wrap"}}>
+            <select value={avgMode} onChange={e => setAvgMode(e.target.value)}
+              style={{...inputStyle,padding:"4px 8px",fontSize:"0.75rem"}}>
+              <option value="months">חודשים אחרונים</option>
+              <option value="custom">התאמה אישית</option>
             </select>
+            {avgMode === "months" && (
+              <select value={monthsBack} onChange={e => setMonthsBack(parseInt(e.target.value))}
+                style={{...inputStyle,padding:"4px 8px",fontSize:"0.75rem"}}>
+                {[3,6,9,12,18].map(n => <option key={n} value={n}>{n} חודשים</option>)}
+              </select>
+            )}
           </div>
+          {avgMode === "custom" && (
+            <div style={{marginTop:8,display:"flex",flexDirection:"column",gap:6,alignItems:"center"}}>
+              <div style={{display:"flex",alignItems:"center",gap:4}}>
+                <span style={{fontSize:"0.72rem",color:"var(--text-soft)"}}>מ:</span>
+                <input type="date" value={avgStart} onChange={e => setAvgStart(e.target.value)}
+                  style={{...inputStyle,padding:"4px 8px",fontSize:"0.72rem"}} />
+              </div>
+              <div style={{display:"flex",alignItems:"center",gap:4}}>
+                <span style={{fontSize:"0.72rem",color:"var(--text-soft)"}}>עד:</span>
+                <input type="date" value={avgEnd} onChange={e => setAvgEnd(e.target.value)}
+                  style={{...inputStyle,padding:"4px 8px",fontSize:"0.72rem"}} />
+              </div>
+            </div>
+          )}
         </div>
         <div className="card" style={{textAlign:"center"}}>
           <div style={{fontSize:"0.8rem",color:"var(--text-soft)",marginBottom:6}}>אחוז ביטולים</div>
@@ -2664,33 +2658,36 @@ function Finance({ receiptsHistory, appointments }) {
             {cancelRate}%
           </div>
           <div style={{fontSize:"0.72rem",color:"var(--text-soft)",marginTop:4}}>
-            {totalCancelled} ביטולים מתוך {totalApts} תורים
+            {cancelled} ביטולים מתוך {totalApts} תורים
           </div>
         </div>
       </div>
 
       {/* Monthly bar chart */}
       <div className="card">
-        <div style={{fontWeight:600,color:"var(--sage-dark)",marginBottom:16}}>
-          📈 הכנסות לפי חודשים
-        </div>
-        <div style={{display:"flex",gap:6,alignItems:"flex-end",height:120,overflowX:"auto"}}>
-          {monthsData.map((m, i) => (
-            <div key={i} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:4,minWidth:50,flex:1}}>
-              <div style={{fontSize:"0.65rem",color:"var(--text-soft)"}}>₪{m.income > 0 ? (m.income/1000).toFixed(1)+"k" : "0"}</div>
-              <div style={{
-                width:"100%",
-                height: m.income > 0 ? Math.max((m.income / maxIncome) * 90, 4) : 4,
-                background: i === monthsData.length-1 ? "var(--sage-dark)" : "var(--sage-light)",
-                borderRadius:"6px 6px 0 0",
-                transition:"height 0.3s"
-              }} />
-              <div style={{fontSize:"0.6rem",color:"var(--text-soft)",textAlign:"center",lineHeight:1.2}}>
-                {m.label.split(" ")[0]}
+        <div style={{fontWeight:600,color:"var(--sage-dark)",marginBottom:16}}>📈 הכנסות לפי חודשים</div>
+        {monthsData.length === 0 ? (
+          <p className="text-soft">אין נתונים</p>
+        ) : (
+          <div style={{display:"flex",gap:6,alignItems:"flex-end",height:120,overflowX:"auto",paddingBottom:4}}>
+            {monthsData.map((m, i) => (
+              <div key={i} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:4,minWidth:44,flex:1}}>
+                <div style={{fontSize:"0.62rem",color:"var(--text-soft)"}}>
+                  {m.income > 0 ? "₪"+(m.income/1000).toFixed(1)+"k" : ""}
+                </div>
+                <div style={{
+                  width:"100%",
+                  height: m.income > 0 ? Math.max((m.income / maxIncome) * 90, 4) : 4,
+                  background: i === monthsData.length-1 ? "var(--sage-dark)" : "var(--sage-light)",
+                  borderRadius:"6px 6px 0 0",transition:"height 0.3s"
+                }} />
+                <div style={{fontSize:"0.58rem",color:"var(--text-soft)",textAlign:"center"}}>
+                  {m.label}
+                </div>
               </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
       </div>
     </>
   );
