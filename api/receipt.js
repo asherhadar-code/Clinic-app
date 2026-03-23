@@ -39,7 +39,7 @@ export default async function handler(req, res) {
         type: 320, // Receipt type
         lang: "he",
         currency: "ILS",
-        vatType: 0,
+        vatType: 1,
         discount: 0,
         rounding: false,
         signed: true,
