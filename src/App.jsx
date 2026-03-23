@@ -1650,7 +1650,7 @@ function Dashboard({ patients, appointments, openModal, sendWhatsApp }) {
               <div className="patient-name">{p.name}</div>
               <div className="patient-meta" style={{color:"#C4724A"}}>❌ טרם שולם</div>
             </div>
-            <button className="btn btn-sm btn-danger" onClick={() => openModal("receipt", p)}>🧾 הנפק קבלה</button>
+            <button className="btn btn-sm btn-danger" onClick={() => openModal("receipt", p)}>🧾 הפק חשבונית</button>
           </div>
         ))}
       </div>
@@ -2028,7 +2028,7 @@ function PatientDetail({ patient, onBack, openModal, generateReport, aiText, aiL
           <button className="btn btn-secondary btn-sm" onClick={() => openModal("post_session", patient)}>📝 סיכום אחרי טיפול</button>
           <button className="btn btn-secondary btn-sm" onClick={() => openModal("reminder", patient)}>🔔 תזכורת</button>
           <button className="btn btn-secondary btn-sm" onClick={() => openAiChat(patient)}>🤖 עוזר AI</button>
-          <button className="btn btn-danger btn-sm" onClick={() => openModal("receipt", patient)}>🧾 קבלה</button>
+          <button className="btn btn-danger btn-sm" onClick={() => openModal("receipt", patient)}>🧾 הפק חשבונית</button>
         </div>
         <div style={{display:"flex",gap:8}}>
           <button className="btn btn-secondary btn-sm" onClick={onEdit}>✏️ עריכה</button>
@@ -2183,7 +2183,7 @@ function Receipts({ patients, openModal, receiptsHistory }) {
               <div className="patient-name">{p.name}</div>
               <div className="patient-meta" style={{color:"#C4724A"}}>❌ טרם שולם</div>
             </div>
-            <button className="btn btn-primary btn-sm" onClick={() => openModal("receipt", p)}>🧾 הנפק קבלה</button>
+            <button className="btn btn-primary btn-sm" onClick={() => openModal("receipt", p)}>🧾 הפק חשבונית</button>
           </div>
         ))}
       </div>
