@@ -1105,7 +1105,7 @@ export default function App() {
 
   const generateReceipt = async () => {
     if (!receiptData.amount) return alert("נא להזין סכום");
-    showNotification("⏳ יוצר קבלה בחשבונית הירוקה...");
+    showNotification("⏳ יוצר חשבונית מס קבלה...");
     try {
       const email = receiptData.email || currentPatientForModal?.email || "";
       const res = await fetch("/api/receipt", {
@@ -1125,7 +1125,7 @@ export default function App() {
           p.id === currentPatientForModal?.id ? { ...p, paid: true } : p
         ));
         sb.markPaid(currentPatientForModal?.id, true).catch(() => {});
-        showNotification(`✅ קבלה מס' ${data.receiptNumber} נוצרה ונשלחה בהצלחה!`);
+        showNotification(`✅ חשבונית מס' ${data.receiptNumber} נוצרה ונשלחה בהצלחה!`);
         // Save to receipts history
         try {
           await sb.saveReceipt({
@@ -1365,7 +1365,7 @@ ${styleExamples ? `להלן דוגמאות לסגנון הכתיבה של הקל
 
       {modal === "receipt" && (
         <Modal onClose={closeModal}>
-          <h3>🧾 קבלה — {currentPatientForModal?.name}</h3>
+          <h3>🧾 חשבונית מס קבלה — {currentPatientForModal?.name}</h3>
 
           {/* פרטי קשר */}
           <div style={{background:"var(--cream)",borderRadius:12,padding:"12px 14px",marginBottom:8,fontSize:"0.85rem"}}>
@@ -1418,7 +1418,7 @@ ${styleExamples ? `להלן דוגמאות לסגנון הכתיבה של הקל
             </div>
           )}
           <div className="flex gap-3 mt-3">
-            <button className="btn btn-primary" onClick={generateReceipt}>שלח קבלה</button>
+            <button className="btn btn-primary" onClick={generateReceipt}>שלח חשבונית</button>
             <button className="btn btn-secondary" onClick={closeModal}>ביטול</button>
           </div>
         </Modal>
