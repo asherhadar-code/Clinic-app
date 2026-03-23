@@ -36,7 +36,7 @@ export default async function handler(req, res) {
       },
       body: JSON.stringify({
         description: description || "טיפול קלינאות תקשורת",
-        type: 400, // Receipt type
+        type: 320, // Receipt type
         lang: "he",
         currency: "ILS",
         vatType: 0,
