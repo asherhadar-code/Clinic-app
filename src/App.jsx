@@ -1606,8 +1606,8 @@ function Sidebar({ page, setPage, leadsCount }) {
   const nav = [
     { id:"dashboard",       icon:"🏠", label:"ראשי" },
     { id:"calendar",        icon:"📅", label:"יומן" },
-    { id:"patients",        icon:"👥", label:"מטופלים", sub:[
-      { id:"patients_list",     icon:"👥", label:"ניהול מטופלים" },
+    { id:"patients",        icon:"👥", label:"ניהול הקליניקה", sub:[
+      { id:"patients_list",     icon:"👥", label:"מטופלים" },
       { id:"receipts",          icon:"🧾", label:"חשבוניות" },
       { id:"patients_archive",  icon:"📦", label:"ארכיון" },
     ]},
@@ -1641,13 +1641,20 @@ function Sidebar({ page, setPage, leadsCount }) {
           </div>
           {/* Sub-tabs */}
           {n.sub && isPatientsSection && n.id === "patients" && (
-            <div style={{background:"rgba(0,0,0,0.15)",paddingRight:8}}>
+            <div style={{background:"rgba(0,0,0,0.2)"}}>
               {n.sub.map(s => (
                 <div key={s.id}
                   className={`nav-item ${page === s.id || (page === "patient_detail" && s.id === "patients_list") ? "active" : ""}`}
                   onClick={() => setPage(s.id)}
-                  style={{fontSize:"0.82rem",padding:"9px 20px",borderRight:"2px solid transparent"}}>
-                  <span className="nav-icon" style={{fontSize:"0.9rem"}}>{s.icon}</span>{s.label}
+                  style={{
+                    fontSize:"0.78rem",
+                    padding:"8px 16px 8px 24px",
+                    borderRight:"2px solid transparent",
+                    paddingRight:32
+                  }}>
+                  <span style={{marginLeft:4,opacity:0.7}}>—</span>
+                  <span className="nav-icon" style={{fontSize:"0.85rem"}}>{s.icon}</span>
+                  {s.label}
                 </div>
               ))}
             </div>
