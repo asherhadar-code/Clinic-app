@@ -1886,10 +1886,42 @@ function Calendar({ patients, appointments, setAppointments, openModal, sendWhat
               {timeline.map((b, bi) => (
                 <div key={b.id}>
                   {b.type === "treatment" ? (
-                    <div style={{background:"var(--sage-light)",border:"2px solid var(--sage)",borderRadius:10,padding:"8px 10px",marginBottom:2,position:"relative"}}>
+                    <div style={{
+                      background: b.status==="arrived" ? "#E8F5E8" : b.status==="cancelled" ? "#FBE8E3" : "var(--sage-light)",
+                      border: `2px solid ${b.status==="arrived" ? "#4CAF50" : b.status==="cancelled" ? "#C4724A" : "var(--sage)"}`,
+                      borderRadius:10,padding:"8px 10px",marginBottom:2,position:"relative"
+                    }}>
                       <div style={{fontSize:"0.68rem",color:"var(--text-soft)"}}>{b.startTime}–{b.endTime}</div>
                       <div style={{fontWeight:600,fontSize:"0.82rem",color:"var(--sage-dark)",marginTop:1}}>{b.patientName}</div>
-                      <div style={{fontSize:"0.68rem",color: b.status==="confirmed"?"#4CAF50":"#FFA000",marginTop:2}}>{b.status==="confirmed"?"✅ אישר":"⏳ ממתין"}</div>
+                      <div style={{fontSize:"0.68rem",marginTop:2,color:
+                        b.status==="arrived"?"#2E7D32":b.status==="cancelled"?"#C4724A":b.status==="confirmed"?"#4CAF50":"#FFA000"}}>
+                        {b.status==="arrived"?"✅ הגיע":b.status==="cancelled"?"❌ בוטל":b.status==="confirmed"?"✅ אישר":"⏳ ממתין"}
+                      </div>
+                      {/* Action buttons */}
+                      <div style={{display:"flex",gap:4,marginTop:6}}>
+                        <button onClick={e=>{e.stopPropagation();sb.updateAppointmentStatus(b.id,"arrived").then(()=>{setAppointments(prev=>prev.map(a=>a.id===b.id?{...a,status:"arrived"}:a));});}}
+                          style={{flex:1,padding:"3px 0",fontSize:"0.6rem",borderRadius:6,border:"none",
+                            background:b.status==="arrived"?"#4CAF50":"#E8F5E8",color:b.status==="arrived"?"white":"#2E7D32",cursor:"pointer"}}>
+                          ✅ הגיע
+                        </button>
+                        <button onClick={e=>{e.stopPropagation();sb.updateAppointmentStatus(b.id,"cancelled").then(()=>{setAppointments(prev=>prev.map(a=>a.id===b.id?{...a,status:"cancelled"}:a));});}}
+                          style={{flex:1,padding:"3px 0",fontSize:"0.6rem",borderRadius:6,border:"none",
+                            background:b.status==="cancelled"?"#C4724A":"#FBE8E3",color:b.status==="cancelled"?"white":"#C4724A",cursor:"pointer"}}>
+                          ❌ בוטל
+                        </button>
+                        <button onClick={e=>{e.stopPropagation();
+                          const patient = patients.find(p=>p.id===b.patientId||p.name===b.patientName);
+                          const lastSummary = patient?.history?.[0]?.summary;
+                          if (!lastSummary) { alert("אין סיכום טיפול קודם"); return; }
+                          const utterance = new SpeechSynthesisUtterance(lastSummary);
+                          utterance.lang = "he-IL";
+                          window.speechSynthesis.speak(utterance);
+                        }}
+                          style={{flex:1,padding:"3px 0",fontSize:"0.6rem",borderRadius:6,border:"none",
+                            background:"var(--warm)",color:"var(--sage-dark)",cursor:"pointer"}}>
+                          🔊 סקירה
+                        </button>
+                      </div>
                       <span onClick={() => removeBlock(di, b.id)}
                         style={{position:"absolute",top:5,left:6,cursor:"pointer",fontSize:"0.7rem",color:"var(--terracotta)",opacity:0.7}}>✕</span>
                     </div>
