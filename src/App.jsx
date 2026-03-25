@@ -1350,7 +1350,7 @@ ${styleExamples ? `להלן דוגמאות לסגנון הכתיבה של הקל
     <>
       <style>{CSS}</style>
       <div className="app">
-        <Sidebar page={page} setPage={(p) => { setPage(p); setSelectedPatient(null); }} />
+        <Sidebar page={page} setPage={(p) => { setPage(p); setSelectedPatient(null); }} leadsCount={leads.filter(l => l.status === "waiting").length} />
         <main className="main">
           {notification && <div className="banner">🔔 {notification}</div>}
 
@@ -1586,7 +1586,7 @@ ${styleExamples ? `להלן דוגמאות לסגנון הכתיבה של הקל
 }
 
 // ── Sidebar ────────────────────────────────────────────────────────
-function Sidebar({ page, setPage }) {
+function Sidebar({ page, setPage, leadsCount }) {
   const nav = [
     { id:"dashboard",       icon:"🏠", label:"ראשי" },
     { id:"calendar",        icon:"📅", label:"יומן" },
@@ -1605,8 +1605,17 @@ function Sidebar({ page, setPage }) {
       </div>
       {nav.map(n => (
         <div key={n.id} className={`nav-item ${page === n.id || (page==="patient_detail" && n.id==="patients") ? "active":""}`}
-          onClick={() => setPage(n.id)}>
+          onClick={() => setPage(n.id)} style={{position:"relative"}}>
           <span className="nav-icon">{n.icon}</span>{n.label}
+          {n.id === "leads" && leadsCount > 0 && (
+            <span style={{
+              position:"absolute", top:6, left:8,
+              background:"#E53935", color:"white",
+              borderRadius:"50%", minWidth:18, height:18,
+              display:"flex", alignItems:"center", justifyContent:"center",
+              fontSize:"0.65rem", fontWeight:700, padding:"0 3px"
+            }}>{leadsCount}</span>
+          )}
         </div>
       ))}
     </aside>
