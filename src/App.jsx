@@ -102,7 +102,8 @@ const sb = {
         start_time: apt.startTime || "00:00", 
         status: apt.status || "pending",
         block_type: apt.blockType || "treatment",
-        minutes: apt.minutes || 45
+        minutes: apt.minutes || 45,
+        date: apt.date || null
       })
     });
     const data = await res.json();
@@ -1708,180 +1709,253 @@ function Dashboard({ patients, appointments, openModal, sendWhatsApp }) {
 // Each day has an ordered list of "blocks": { type:"treatment"|"break", minutes, patientId?, patientName?, status? }
 // The schedule is built by walking blocks sequentially from dayStart.
 
+// ── Hebrew Date & Holidays ────────────────────────────────────────
+function useHebrewCalendar(weekDates) {
+  const [holidays, setHolidays] = useState({});
+
+  useEffect(() => {
+    if (!weekDates || weekDates.length === 0) return;
+    const start = weekDates[0];
+    const end = weekDates[weekDates.length - 1];
+    const fmt = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+    const url = `https://www.hebcal.com/hebcal?v=1&cfg=json&maj=on&min=on&mod=on&nx=on&year=${start.getFullYear()}&month=${start.getMonth()+1}&ss=on&mf=on&c=off&geo=il&M=on&s=on`;
+    fetch(url)
+      .then(r => r.json())
+      .then(data => {
+        const map = {};
+        (data.items || []).forEach(item => {
+          const d = item.date?.split("T")[0];
+          if (d) {
+            if (!map[d]) map[d] = [];
+            map[d].push(item.title);
+          }
+        });
+        setHolidays(map);
+      })
+      .catch(() => {});
+  }, [weekDates?.map(d=>d.toISOString()).join(",")]);
+
+  const getHebrewDate = (date) => {
+    try {
+      return new Intl.DateTimeFormat("he-IL-u-ca-hebrew", {
+        day: "numeric", month: "long"
+      }).format(date);
+    } catch { return ""; }
+  };
+
+  return { holidays, getHebrewDate };
+}
+
 function Calendar({ patients, appointments, setAppointments, openModal, sendWhatsApp, settings }) {
   const [dayStart, setDayStart] = useState("08:30");
-  const [dayEnd,   setDayEnd]   = useState("14:30");
-
-  // dayBlocks built from Supabase appointments
   const makeId = () => Math.random().toString(36).slice(2,8);
-  const [localBreaks, setLocalBreaks] = useState({});
 
-  // Build dayBlocks from appointments (includes breaks)
-  const buildDayBlocks = () => {
-    const blocks = {};
-    (appointments || []).forEach(a => {
-      const di = a.day_index;
-      if (!blocks[di]) blocks[di] = [];
-      blocks[di].push({ 
-        id: a.id, 
-        type: a.block_type || "treatment", 
-        minutes: a.minutes || 45, 
-        patientId: a.patient_id, 
-        patientName: a.patient_name, 
-        status: a.status || "pending",
-        startTime: a.start_time || "00:00"
-      });
-    });
-    // Sort by start_time from DB
-    Object.keys(blocks).forEach(di => {
-      blocks[di].sort((a,b) => a.startTime > b.startTime ? 1 : -1);
-    });
-    return blocks;
+  // Week navigation
+  const [weekOffset, setWeekOffset] = useState(0);
+
+  // Get the Sunday of current week + offset
+  const getWeekStart = (offset) => {
+    const today = new Date();
+    const day = today.getDay(); // 0=Sun
+    const sun = new Date(today);
+    sun.setDate(today.getDate() - day + offset * 7);
+    sun.setHours(0,0,0,0);
+    return sun;
   };
-  const dayBlocks = buildDayBlocks();
 
-  // Modal state: adding a new block to a day
-  const [addModal, setAddModal] = useState(null); // { dayIdx, insertAfterIdx }
-  const [addType, setAddType]   = useState("treatment");
-  const [breakMins, setBreakMins] = useState(10);
-  const [patientQ, setPatientQ]  = useState("");
+  const weekStart = getWeekStart(weekOffset);
 
-  // Convert "HH:MM" to minutes
-  const toMin = t => { const [h,m] = t.split(":").map(Number); return h*60+m; };
+  const fmt = (d) => {
+    const y = d.getFullYear();
+    const m = String(d.getMonth()+1).padStart(2,"0");
+    const day = String(d.getDate()).padStart(2,"0");
+    return `${y}-${m}-${day}`;
+  };
+
+  const workDays = settings?.workDays || [0,1,2,3,4];
+  const WEEK_DAYS_HE = ["ראשון","שני","שלישי","רביעי","חמישי","שישי","שבת"];
+
+  // Build week dates
+  const weekDates = Array.from({length:7}, (_,i) => {
+    const d = new Date(weekStart);
+    d.setDate(weekStart.getDate() + i);
+    return d;
+  }).filter(d => workDays.includes(d.getDay()));
+
+  const { holidays, getHebrewDate } = useHebrewCalendar(weekDates);
+
+  // Get appointments for a specific date
+  const getDateBlocks = (dateStr) => {
+    return (appointments || [])
+      .filter(a => a.date === dateStr)
+      .sort((a,b) => (a.start_time||"") > (b.start_time||"") ? 1 : -1)
+      .map(a => ({
+        id: a.id,
+        type: a.block_type || "treatment",
+        minutes: a.minutes || 45,
+        patientId: a.patient_id,
+        patientName: a.patient_name,
+        status: a.status || "pending",
+        startTime: a.start_time || "08:30",
+        date: a.date
+      }));
+  };
+
+  const toMin = t => { const [h,m] = (t||"00:00").split(":").map(Number); return h*60+m; };
   const toTime = m => `${String(Math.floor(m/60)).padStart(2,"0")}:${String(m%60).padStart(2,"0")}`;
 
-  // Build timeline for a day: returns blocks with computed startTime
-  const buildTimeline = (dayIdx) => {
-    const blocks = dayBlocks[dayIdx] || [];
+  const buildTimeline = (dateStr) => {
+    const blocks = getDateBlocks(dateStr);
     let cur = toMin(dayStart);
     return blocks.map(b => {
-      const start = toTime(cur);
-      cur += b.minutes;
+      const start = b.startTime !== "08:30" ? b.startTime : toTime(cur);
+      cur = toMin(start) + b.minutes;
       return { ...b, startTime: start, endTime: toTime(cur) };
     });
   };
 
-  const addBlock = async (dayIdx, insertAfterIdx) => {
-    if (addType === "break") {
-      const timeline = buildTimeline(dayIdx);
-      // startTime of the break = end of block before it
-      const insertAfter = timeline[insertAfterIdx];
-      const breakStart = insertAfter ? insertAfter.endTime : dayStart;
-
-      try {
-        // 1. Save the break
-        const newApt = await sb.addAppointment({
-          dayIndex: dayIdx,
-          startTime: breakStart,
-          blockType: "break",
-          minutes: breakMins,
-          status: "break"
-        });
-
-        // 2. Update all appointments AFTER the break — shift their start_time by breakMins
-        const toMin = t => { const [h,m] = t.split(":").map(Number); return h*60+m; };
-        const toTime = m => String(Math.floor(m/60)).padStart(2,"0") + ":" + String(m%60).padStart(2,"0");
-        
-        const breakStartMin = toMin(breakStart);
-        const afterBreak = timeline.slice(insertAfterIdx + 1);
-        
-        // Update each subsequent appointment in Supabase
-        const updatePromises = afterBreak.map(b => {
-          const newStart = toTime(toMin(b.startTime) + breakMins);
-          return sb.updateAppointmentStatus(b.id, b.status).then(() =>
-            fetch(`${SUPABASE_URL}/rest/v1/appointments?id=eq.${b.id}`, {
-              method: "PATCH",
-              headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json" },
-              body: JSON.stringify({ start_time: newStart })
-            })
-          );
-        });
-        await Promise.all(updatePromises);
-
-        // 3. Reload appointments from Supabase to reflect all changes
-        const res = await fetch(`${SUPABASE_URL}/rest/v1/appointments?select=*&order=day_index.asc,start_time.asc`, {
-          headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` }
-        });
-        const updated = await res.json();
-        if (Array.isArray(updated)) setAppointments(updated);
-
-      } catch(e) {
-        console.error("Error adding break:", e);
-      }
-      setAddModal(null);
-    }
-  };
+  const [addModal, setAddModal] = useState(null);
+  const [addType, setAddType] = useState("treatment");
+  const [breakMins, setBreakMins] = useState(10);
+  const [patientQ, setPatientQ] = useState("");
 
   const assignPatientToModal = async (patient) => {
     try {
-      const timeline = buildTimeline(addModal.dayIdx);
+      const timeline = buildTimeline(addModal.dateStr);
       const insertAfter = timeline[addModal.insertAfterIdx];
       const startTime = insertAfter ? insertAfter.endTime : dayStart;
       const newApt = await sb.addAppointment({
         patientId: patient.id,
         patientName: patient.name,
-        dayIndex: addModal.dayIdx,
+        dayIndex: new Date(addModal.dateStr).getDay(),
         startTime,
         blockType: "treatment",
         minutes: 45,
+        date: addModal.dateStr,
       });
       if (newApt && newApt.id) {
-        setAppointments(prev => [...prev, { ...newApt, day_index: addModal.dayIdx, patient_name: patient.name, patient_id: patient.id, status: "pending" }]);
+        setAppointments(prev => [...prev, {
+          ...newApt,
+          day_index: new Date(addModal.dateStr).getDay(),
+          patient_name: patient.name,
+          patient_id: patient.id,
+          status: "pending",
+          start_time: startTime,
+          date: addModal.dateStr,
+          block_type: "treatment",
+          minutes: 45
+        }]);
       }
-    } catch(e) {
-      console.error("Error adding appointment:", e);
-    }
+    } catch(e) { console.error(e); }
     setAddModal(null);
     setPatientQ("");
   };
 
-  const removeBlock = async (dayIdx, blockId) => {
-    // Check if it's a local break or a real appointment
-    if (typeof blockId === 'string' && blockId.length < 10) {
-      // Local break
-      setLocalBreaks(prev => ({ ...prev, [dayIdx]: (prev[dayIdx]||[]).filter(b => b.id !== blockId) }));
-    } else {
-      // Real appointment in Supabase
-      try { await sb.deleteAppointment(blockId); } catch(e) {}
-      setAppointments(prev => prev.filter(a => a.id !== blockId));
+  const addBlock = async (dateStr, insertAfterIdx) => {
+    if (addType === "break") {
+      const timeline = buildTimeline(dateStr);
+      const insertAfter = timeline[insertAfterIdx];
+      const breakStart = insertAfter ? insertAfter.endTime : dayStart;
+      try {
+        const newApt = await sb.addAppointment({
+          dayIndex: new Date(dateStr).getDay(),
+          startTime: breakStart,
+          blockType: "break",
+          minutes: breakMins,
+          status: "break",
+          date: dateStr,
+        });
+        if (newApt && newApt.id) {
+          setAppointments(prev => [...prev, {
+            ...newApt,
+            day_index: new Date(dateStr).getDay(),
+            block_type: "break",
+            minutes: breakMins,
+            start_time: breakStart,
+            status: "break",
+            date: dateStr
+          }]);
+        }
+      } catch(e) { console.error(e); }
+      setAddModal(null);
     }
   };
 
+  const removeBlock = async (dateStr, blockId) => {
+    try { await sb.deleteAppointment(blockId); } catch {}
+    setAppointments(prev => prev.filter(a => a.id !== blockId));
+  };
+
+  const updateStatus = (blockId, status) => {
+    sb.updateAppointmentStatus(blockId, status).catch(()=>{});
+    setAppointments(prev => prev.map(a => a.id === blockId ? {...a, status} : a));
+  };
+
+  const isToday = (d) => fmt(d) === fmt(new Date());
+
+  const weekLabel = () => {
+    const end = new Date(weekStart);
+    end.setDate(weekStart.getDate() + 6);
+    return `${weekStart.toLocaleDateString("he-IL",{day:"numeric",month:"numeric"})} – ${end.toLocaleDateString("he-IL",{day:"numeric",month:"numeric",year:"numeric"})}`;
+  };
+
   const filteredPatients = patients.filter(p =>
-    p.name.includes(patientQ) || (p.firstName||"").includes(patientQ) || (p.lastName||"").includes(patientQ)
+    (p.name||"").includes(patientQ) || (p.firstName||"").includes(patientQ)
   );
 
   return (
-    <div>
-      <div className="top-bar">
-        <h1 className="page-title" style={{marginBottom:0}}>📅 יומן שבועי</h1>
-      </div>
-
-      <div className="card" style={{marginBottom:16}}>
-        <div className="cal-toolbar">
-          <div style={{display:"flex",alignItems:"center",gap:6}}>
-            <label>🕐 תחילת יום:</label>
-            <input type="time" value={dayStart} onChange={e => setDayStart(e.target.value)} />
-          </div>
-          <div style={{display:"flex",alignItems:"center",gap:6}}>
-            <label>🕕 סיום יום:</label>
-            <input type="time" value={dayEnd} onChange={e => setDayEnd(e.target.value)} />
-          </div>
-        </div>
-        <div style={{fontSize:"0.75rem",color:"var(--text-soft)",marginTop:8}}>
-          לחצי על ➕ בין אירועים להוספת טיפול או הפסקה
+    <div style={{direction:"rtl"}}>
+      {/* Week navigation */}
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16,flexWrap:"wrap",gap:8}}>
+        <h1 className="page-title" style={{marginBottom:0}}>📅 יומן</h1>
+        <div style={{display:"flex",alignItems:"center",gap:8}}>
+          <button className="btn btn-secondary btn-sm" onClick={() => setWeekOffset(w => w-1)}>→ שבוע קודם</button>
+          <span style={{fontSize:"0.82rem",color:"var(--text-soft)",fontWeight:500}}>{weekLabel()}</span>
+          <button className="btn btn-secondary btn-sm" onClick={() => setWeekOffset(w => w+1)}>שבוע הבא ←</button>
+          <button className="btn btn-primary btn-sm" onClick={() => setWeekOffset(0)}>היום</button>
         </div>
       </div>
 
-      <div style={{display:"flex",gap:10,overflowX:"auto",paddingBottom:8}}>
-        {WEEK_DAYS.map((day, di) => { if (settings?.workDays && !settings.workDays.includes(di)) return null;
-          const timeline = buildTimeline(di);
+      {/* Day start setting */}
+      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:16,fontSize:"0.82rem",color:"var(--text-soft)"}}>
+        <span>שעת התחלה:</span>
+        <input type="time" value={dayStart} onChange={e => setDayStart(e.target.value)}
+          style={{padding:"4px 8px",border:"2px solid var(--warm)",borderRadius:8,fontFamily:"DM Sans,sans-serif",fontSize:"0.82rem",background:"var(--cream)"}} />
+      </div>
+
+      {/* Week grid */}
+      <div className="week-grid">
+        {weekDates.map(date => {
+          const dateStr = fmt(date);
+          const timeline = buildTimeline(dateStr);
+          const dayName = WEEK_DAYS_HE[date.getDay()];
+          const dateLabel = date.toLocaleDateString("he-IL",{day:"numeric",month:"numeric"});
+          const today = isToday(date);
+
           return (
-            <div key={di} style={{minWidth:150,flex:1,background:"var(--white)",borderRadius:16,padding:12,boxShadow:"var(--shadow)"}}>
-              <div style={{fontWeight:600,fontSize:"0.85rem",color:"var(--sage-dark)",marginBottom:10,textAlign:"center",borderBottom:"2px solid var(--warm)",paddingBottom:6}}>{day}</div>
+            <div key={dateStr} style={{
+              minWidth:150, flex:1,
+              background: today ? "#F0F7F0" : "var(--white)",
+              borderRadius:16, padding:12,
+              boxShadow: today ? "0 0 0 2px var(--sage)" : "var(--shadow)"
+            }}>
+              <div style={{textAlign:"center",borderBottom:"2px solid var(--warm)",paddingBottom:6,marginBottom:10}}>
+                <div style={{fontWeight:600,fontSize:"0.85rem",color: today ? "var(--sage-dark)" : "var(--text)"}}>{dayName}</div>
+                <div style={{fontSize:"0.75rem",color: today ? "var(--sage-dark)" : "var(--text-soft)",fontWeight: today ? 600 : 400}}>
+                  {dateLabel} {today && "⭐"}
+                </div>
+                <div style={{fontSize:"0.65rem",color:"var(--text-soft)",marginTop:1}}>
+                  {getHebrewDate(date)}
+                </div>
+                {holidays[dateStr] && holidays[dateStr].map((h,i) => (
+                  <div key={i} style={{fontSize:"0.62rem",background:"#FFF8E1",color:"#F57F17",
+                    borderRadius:6,padding:"1px 5px",marginTop:2,fontWeight:500}}>
+                    ✡️ {h}
+                  </div>
+                ))}
+              </div>
 
-              {/* Add at start */}
-              <AddBtn onClick={() => { setAddModal({dayIdx:di, insertAfterIdx:-1}); setAddType("treatment"); setPatientQ(""); }} />
+              <AddBtn onClick={() => { setAddModal({dateStr, insertAfterIdx:-1}); setAddType("treatment"); setPatientQ(""); }} />
 
               {timeline.map((b, bi) => (
                 <div key={b.id}>
@@ -1889,7 +1963,7 @@ function Calendar({ patients, appointments, setAppointments, openModal, sendWhat
                     <div style={{
                       background: b.status==="arrived" ? "#E8F5E8" : b.status==="cancelled" ? "#FBE8E3" : "var(--sage-light)",
                       border: `2px solid ${b.status==="arrived" ? "#4CAF50" : b.status==="cancelled" ? "#C4724A" : "var(--sage)"}`,
-                      borderRadius:10,padding:"8px 10px",marginBottom:2,position:"relative"
+                      borderRadius:10, padding:"8px 10px", marginBottom:2, position:"relative"
                     }}>
                       <div style={{fontSize:"0.68rem",color:"var(--text-soft)"}}>{b.startTime}–{b.endTime}</div>
                       <div style={{fontWeight:600,fontSize:"0.82rem",color:"var(--sage-dark)",marginTop:1}}>{b.patientName}</div>
@@ -1897,14 +1971,13 @@ function Calendar({ patients, appointments, setAppointments, openModal, sendWhat
                         b.status==="arrived"?"#2E7D32":b.status==="cancelled"?"#C4724A":b.status==="confirmed"?"#4CAF50":"#FFA000"}}>
                         {b.status==="arrived"?"✅ הגיע":b.status==="cancelled"?"❌ בוטל":b.status==="confirmed"?"✅ אישר":"⏳ ממתין"}
                       </div>
-                      {/* Action buttons */}
                       <div style={{display:"flex",gap:4,marginTop:6}}>
-                        <button onClick={e=>{e.stopPropagation();sb.updateAppointmentStatus(b.id,"arrived").then(()=>{setAppointments(prev=>prev.map(a=>a.id===b.id?{...a,status:"arrived"}:a));});}}
+                        <button onClick={e=>{e.stopPropagation();updateStatus(b.id,"arrived");}}
                           style={{flex:1,padding:"3px 0",fontSize:"0.6rem",borderRadius:6,border:"none",
                             background:b.status==="arrived"?"#4CAF50":"#E8F5E8",color:b.status==="arrived"?"white":"#2E7D32",cursor:"pointer"}}>
                           ✅ הגיע
                         </button>
-                        <button onClick={e=>{e.stopPropagation();sb.updateAppointmentStatus(b.id,"cancelled").then(()=>{setAppointments(prev=>prev.map(a=>a.id===b.id?{...a,status:"cancelled"}:a));});}}
+                        <button onClick={e=>{e.stopPropagation();updateStatus(b.id,"cancelled");}}
                           style={{flex:1,padding:"3px 0",fontSize:"0.6rem",borderRadius:6,border:"none",
                             background:b.status==="cancelled"?"#C4724A":"#FBE8E3",color:b.status==="cancelled"?"white":"#C4724A",cursor:"pointer"}}>
                           ❌ בוטל
@@ -1913,25 +1986,26 @@ function Calendar({ patients, appointments, setAppointments, openModal, sendWhat
                           const patient = patients.find(p=>p.id===b.patientId||p.name===b.patientName);
                           const lastSummary = patient?.history?.[0]?.summary;
                           if (!lastSummary) { alert("אין סיכום טיפול קודם"); return; }
-                          const utterance = new SpeechSynthesisUtterance(lastSummary);
-                          utterance.lang = "he-IL";
-                          window.speechSynthesis.speak(utterance);
+                          const u = new SpeechSynthesisUtterance(lastSummary);
+                          u.lang = "he-IL";
+                          window.speechSynthesis.speak(u);
                         }}
                           style={{flex:1,padding:"3px 0",fontSize:"0.6rem",borderRadius:6,border:"none",
                             background:"var(--warm)",color:"var(--sage-dark)",cursor:"pointer"}}>
                           🔊 סקירה
                         </button>
                       </div>
-                      <span onClick={() => removeBlock(di, b.id)}
+                      <span onClick={() => removeBlock(dateStr, b.id)}
                         style={{position:"absolute",top:5,left:6,cursor:"pointer",fontSize:"0.7rem",color:"var(--terracotta)",opacity:0.7}}>✕</span>
                     </div>
                   ) : (
-                    <div style={{background:"repeating-linear-gradient(45deg,#f5f0e8,#f5f0e8 4px,#ede5d8 4px,#ede5d8 8px)",borderRadius:10,padding:"6px 10px",marginBottom:2,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                      <span style={{fontSize:"0.75rem",color:"var(--text-soft)"}}>☕ {b.startTime} ({b.minutes} דק')</span>
-                      <span onClick={() => removeBlock(di, b.id)} style={{cursor:"pointer",fontSize:"0.7rem",color:"var(--terracotta)"}}>✕</span>
+                    <div style={{background:"repeating-linear-gradient(45deg,#f5f0e8,#f5f0e8 4px,#ede5d8 4px,#ede5d8 8px)",
+                      borderRadius:10,padding:"6px 10px",marginBottom:2,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                      <span style={{fontSize:"0.75rem",color:"var(--text-soft)"}}>☕ {b.startTime} ({b.minutes} דק&apos;)</span>
+                      <span onClick={() => removeBlock(dateStr, b.id)} style={{cursor:"pointer",fontSize:"0.7rem",color:"var(--terracotta)"}}>✕</span>
                     </div>
                   )}
-                  <AddBtn onClick={() => { setAddModal({dayIdx:di, insertAfterIdx:bi}); setAddType("treatment"); setPatientQ(""); }} />
+                  <AddBtn onClick={() => { setAddModal({dateStr, insertAfterIdx:bi}); setAddType("treatment"); setPatientQ(""); }} />
                 </div>
               ))}
 
@@ -1947,9 +2021,10 @@ function Calendar({ patients, appointments, setAppointments, openModal, sendWhat
       {addModal && (
         <div className="modal-overlay" onClick={() => setAddModal(null)}>
           <div className="modal" style={{width:320}} onClick={e => e.stopPropagation()}>
-            <h3 style={{marginBottom:14}}>➕ הוסף ל{WEEK_DAYS[addModal.dayIdx]}</h3>
+            <h3 style={{marginBottom:14}}>
+              ➕ הוסף — {new Date(addModal.dateStr).toLocaleDateString("he-IL",{weekday:"long",day:"numeric",month:"long"})}
+            </h3>
 
-            {/* Toggle: treatment / break */}
             <div style={{display:"flex",gap:4,background:"var(--warm)",borderRadius:10,padding:3,marginBottom:14}}>
               {[["treatment","👤 טיפול"],["break","☕ הפסקה"]].map(([val,label]) => (
                 <div key={val} onClick={() => setAddType(val)}
@@ -1957,7 +2032,6 @@ function Calendar({ patients, appointments, setAppointments, openModal, sendWhat
                     background:addType===val?"var(--white)":"transparent",
                     fontWeight:addType===val?600:400,
                     color:addType===val?"var(--sage-dark)":"var(--text-soft)",
-                    boxShadow:addType===val?"0 1px 4px rgba(0,0,0,0.1)":"none",
                     transition:"all 0.15s"}}>{label}</div>
               ))}
             </div>
@@ -1970,29 +2044,32 @@ function Calendar({ patients, appointments, setAppointments, openModal, sendWhat
                     <div key={m} onClick={() => setBreakMins(m)}
                       style={{padding:"7px 14px",borderRadius:10,cursor:"pointer",fontSize:"0.82rem",
                         background:breakMins===m?"var(--sage-dark)":"var(--warm)",
-                        color:breakMins===m?"white":"var(--text)",
-                        fontWeight:breakMins===m?600:400,
-                        transition:"all 0.15s"}}>{m} דק'</div>
+                        color:breakMins===m?"white":"var(--text-soft)",transition:"all 0.15s"}}>
+                      {m} דק&apos;
+                    </div>
                   ))}
                 </div>
-                <button className="btn btn-primary" style={{width:"100%"}} onClick={() => addBlock(addModal.dayIdx, addModal.insertAfterIdx)}>
-                  ☕ הוסף הפסקה של {breakMins} דק'
-                </button>
+                <button className="btn btn-primary" onClick={() => addBlock(addModal.dateStr, addModal.insertAfterIdx)}>הוסף הפסקה</button>
               </div>
             ) : (
               <div>
                 <p style={{fontSize:"0.8rem",color:"var(--text-soft)",marginBottom:8}}>בחרי מטופל:</p>
-                <input className="picker-search" placeholder="חיפוש..." value={patientQ} onChange={e => setPatientQ(e.target.value)} autoFocus />
-                <div className="picker-list" style={{maxHeight:200}}>
+                <input className="field" placeholder="חיפוש..." value={patientQ}
+                  onChange={e => setPatientQ(e.target.value)} style={{marginBottom:10}} />
+                <div style={{maxHeight:200,overflowY:"auto"}}>
                   {filteredPatients.map(p => (
-                    <div key={p.id} className="picker-item" onClick={() => assignPatientToModal(p)}>
-                      {p.firstName||p.name} {p.lastName||""} <span style={{color:"var(--text-soft)",fontSize:"0.73rem"}}>({p.diagnosis?.slice(0,18)})</span>
+                    <div key={p.id} className="picker-item" onClick={() => assignPatientToModal(p)}
+                      style={{padding:"8px 12px",borderRadius:10,cursor:"pointer",marginBottom:4,
+                        background:"var(--cream)",transition:"background 0.15s"}}
+                      onMouseEnter={e=>e.currentTarget.style.background="var(--warm)"}
+                      onMouseLeave={e=>e.currentTarget.style.background="var(--cream)"}>
+                      <div style={{fontWeight:500}}>{p.name}</div>
+                      <div style={{fontSize:"0.75rem",color:"var(--text-soft)"}}>{p.diagnosis}</div>
                     </div>
                   ))}
                 </div>
               </div>
             )}
-
             <button className="btn btn-secondary mt-3" onClick={() => setAddModal(null)}>ביטול</button>
           </div>
         </div>
@@ -2000,6 +2077,7 @@ function Calendar({ patients, appointments, setAppointments, openModal, sendWhat
     </div>
   );
 }
+
 
 function AddBtn({ onClick }) {
   return (
