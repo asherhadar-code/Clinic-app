@@ -1718,28 +1718,38 @@ function useHebrewCalendar(weekDates) {
     const start = weekDates[0];
     const end = weekDates[weekDates.length - 1];
     const fmt = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
-    const url = `https://www.hebcal.com/hebcal?v=1&cfg=json&maj=on&min=on&mod=on&nx=on&year=${start.getFullYear()}&month=${start.getMonth()+1}&ss=on&mf=on&c=off&geo=il&M=on&s=on`;
-    fetch(url)
-      .then(r => r.json())
-      .then(data => {
-        const map = {};
+    // Fetch holidays for both start and end month (week might span two months)
+    const months = [...new Set([start.getMonth()+1, end.getMonth()+1])];
+    const year = start.getFullYear();
+    Promise.all(months.map(month =>
+      fetch(`https://www.hebcal.com/hebcal?v=1&cfg=json&maj=on&min=on&mod=on&nx=on&year=${year}&month=${month}&ss=on&mf=on&c=off&geo=il&M=on&s=on`)
+        .then(r => r.json())
+        .catch(() => ({ items: [] }))
+    )).then(results => {
+      const map = {};
+      results.forEach(data => {
         (data.items || []).forEach(item => {
           const d = item.date?.split("T")[0];
           if (d) {
             if (!map[d]) map[d] = [];
-            map[d].push(item.title);
+            if (!map[d].includes(item.title)) map[d].push(item.title);
           }
         });
-        setHolidays(map);
-      })
-      .catch(() => {});
+      });
+      setHolidays(map);
+    }).catch(() => {});
   }, [weekDates?.map(d=>d.toISOString()).join(",")]);
 
   const getHebrewDate = (date) => {
     try {
-      return new Intl.DateTimeFormat("he-IL-u-ca-hebrew", {
-        day: "numeric", month: "long"
+      // Get day as Hebrew letters
+      const dayNum = new Intl.DateTimeFormat("he-IL-u-ca-hebrew", {
+        day: "numeric"
       }).format(date);
+      const monthName = new Intl.DateTimeFormat("he-IL-u-ca-hebrew", {
+        month: "long"
+      }).format(date);
+      return `${dayNum} ${monthName}`;
     } catch { return ""; }
   };
 
@@ -1947,12 +1957,64 @@ function Calendar({ patients, appointments, setAppointments, openModal, sendWhat
                 <div style={{fontSize:"0.65rem",color:"var(--text-soft)",marginTop:1}}>
                   {getHebrewDate(date)}
                 </div>
-                {holidays[dateStr] && holidays[dateStr].map((h,i) => (
-                  <div key={i} style={{fontSize:"0.62rem",background:"#FFF8E1",color:"#F57F17",
-                    borderRadius:6,padding:"1px 5px",marginTop:2,fontWeight:500}}>
-                    ✡️ {h}
-                  </div>
-                ))}
+                {holidays[dateStr] && holidays[dateStr].map((h,i) => {
+                  const translations = {
+                    "Erev Pesach": "ערב פסח",
+                    "Pesach I": "פסח א׳",
+                    "Pesach II": "פסח ב׳",
+                    "Pesach VII": "פסח ז׳",
+                    "Pesach VIII": "פסח ח׳",
+                    "Chol HaMoed Pesach": "חול המועד פסח",
+                    "Erev Shavuot": "ערב שבועות",
+                    "Shavuot I": "שבועות",
+                    "Shavuot II": "שבועות ב׳",
+                    "Rosh Hashana 5786": "ראש השנה",
+                    "Rosh Hashana 5787": "ראש השנה",
+                    "Erev Rosh Hashana": "ערב ראש השנה",
+                    "Yom Kippur": "יום כיפור",
+                    "Erev Yom Kippur": "ערב יום כיפור",
+                    "Erev Sukkot": "ערב סוכות",
+                    "Sukkot I": "סוכות א׳",
+                    "Sukkot II": "סוכות ב׳",
+                    "Chol HaMoed Sukkot": "חול המועד סוכות",
+                    "Hoshana Raba": "הושענא רבה",
+                    "Shmini Atzeret": "שמיני עצרת",
+                    "Simchat Torah": "שמחת תורה",
+                    "Chanukah: 1 Candle": "חנוכה - נר א׳",
+                    "Chanukah: 2 Candles": "חנוכה - נר ב׳",
+                    "Chanukah: 3 Candles": "חנוכה - נר ג׳",
+                    "Chanukah: 4 Candles": "חנוכה - נר ד׳",
+                    "Chanukah: 5 Candles": "חנוכה - נר ה׳",
+                    "Chanukah: 6 Candles": "חנוכה - נר ו׳",
+                    "Chanukah: 7 Candles": "חנוכה - נר ז׳",
+                    "Chanukah: 8 Candles": "חנוכה - נר ח׳",
+                    "Tu BiShvat": "ט״ו בשבט",
+                    "Purim": "פורים",
+                    "Shushan Purim": "פורים שושן",
+                    "Erev Purim": "ערב פורים",
+                    "Lag BaOmer": "ל״ג בעומר",
+                    "Yom HaShoah": "יום השואה",
+                    "Yom HaZikaron": "יום הזיכרון",
+                    "Yom HaAtzma'ut": "יום העצמאות",
+                    "Yom Yerushalayim": "יום ירושלים",
+                    "Tu B'Av": "ט״ו באב",
+                    "Tish'a B'Av": "תשעה באב",
+                    "Erev Tish'a B'Av": "ערב תשעה באב",
+                    "Fast of Gedaliah": "צום גדליה",
+                    "Fast of Esther": "תענית אסתר",
+                    "Rosh Chodesh": "ראש חודש",
+                  };
+                  const isErev = h.startsWith("Erev");
+                  const translated = translations[h] || h;
+                  return (
+                    <div key={i} style={{fontSize:"0.62rem",
+                      background: isErev ? "#FFF3E0" : "#FFF8E1",
+                      color: isErev ? "#E65100" : "#F57F17",
+                      borderRadius:6,padding:"1px 5px",marginTop:2,fontWeight:500}}>
+                      {isErev ? "🌆" : "✡️"} {translated}
+                    </div>
+                  );
+                })}
               </div>
 
               <AddBtn onClick={() => { setAddModal({dateStr, insertAfterIdx:-1}); setAddType("treatment"); setPatientQ(""); }} />
