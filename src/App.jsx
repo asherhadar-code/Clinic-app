@@ -31,6 +31,7 @@ const sb = {
       nextAppt: String(p.next_appt || "טרם נקבע"),
       sessions: typeof p.sessions === 'number' ? p.sessions : 0,
       paid: p.paid === true,
+      archived: p.archived === true,
       history: (Array.isArray(p.sessions) ? p.sessions : [])
         .sort((a,b) => new Date(b.created_at) - new Date(a.created_at))
         .map(s => ({ date: String(s.date || ""), summary: String(s.summary || "") })),
@@ -80,6 +81,13 @@ const sb = {
       method: "PATCH",
       headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json" },
       body: JSON.stringify({ paid })
+    });
+  },
+  async archivePatient(id, archived) {
+    await fetch(`${SUPABASE_URL}/rest/v1/patients?id=eq.${id}`, {
+      method: "PATCH",
+      headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ archived })
     });
   },
   async getAppointments() {
@@ -980,13 +988,13 @@ export default function App() {
   const deletePatient = async (id) => {
     try {
       const p = patients.find(x => x.id === id);
-      await sb.deletePatient(id);
-      setPatients(prev => prev.filter(x => x.id !== id));
+      await sb.archivePatient(id, true);
+      setPatients(prev => prev.map(x => x.id === id ? {...x, archived: true} : x));
       setSelectedPatient(null);
-      setPage("patients");
-      showNotification("🗑️ " + p.name + " הוסר מהמערכת");
+      setPage("patients_list");
+      showNotification("📦 " + p.name + " הועבר לארכיון");
     } catch {
-      showNotification("❌ שגיאה במחיקת המטופל");
+      showNotification("❌ שגיאה");
     }
   };
   const [selectedPatient, setSelectedPatient] = useState(null);
@@ -1357,17 +1365,21 @@ ${styleExamples ? `להלן דוגמאות לסגנון הכתיבה של הקל
 
           {page === "dashboard" && <Dashboard patients={patients} appointments={appointments} openModal={openModal} sendWhatsApp={sendWhatsApp} />}
           {page === "calendar" && <Calendar patients={patients} appointments={appointments} setAppointments={setAppointments} openModal={openModal} sendWhatsApp={sendWhatsApp} settings={settings} />}
-          {page === "patients" && !selectedPatient &&
-            <PatientList patients={patients} onSelect={p => { setSelectedPatient(p); setPage("patient_detail"); }}
+          {(page === "patients_list" || page === "patients") && !selectedPatient &&
+            <PatientList patients={patients.filter(p => !p.archived)} onSelect={p => { setSelectedPatient(p); setPage("patient_detail"); }}
               onAdd={() => setPatientModal("add")} />}
           {page === "patient_detail" && selectedPatient &&
-            <PatientDetail patient={selectedPatient} onBack={() => { setSelectedPatient(null); setPage("patients"); }}
+            <PatientDetail patient={selectedPatient} onBack={() => { setSelectedPatient(null); setPage("patients_list"); }}
               openModal={openModal} generateReport={generateReport} aiText={aiText} aiLoading={aiLoading} openAiChat={openAiChat}
               documents={documents[selectedPatient.id] || []} addDocument={addDocument} removeDocument={removeDocument}
               onEdit={() => { setEditingPatient(selectedPatient); setPatientModal("edit"); }}
               onDelete={() => deletePatient(selectedPatient.id)} />}
-          {page === "receipts" && <Receipts patients={patients} openModal={openModal} receiptsHistory={receiptsHistory} />}
+          {page === "receipts" && <Receipts patients={patients.filter(p => !p.archived)} openModal={openModal} receiptsHistory={receiptsHistory} />}
           {page === "settings" && <Settings settings={settings} saveSetting={saveSetting} />}
+          {page === "patients_archive" && <PatientsArchive patients={patients.filter(p => p.archived)} receiptsHistory={receiptsHistory} onRestore={(id) => {
+            sb.archivePatient(id, false);
+            setPatients(prev => prev.map(p => p.id === id ? {...p, archived: false} : p));
+          }} />}
           {page === "finance" && <Finance receiptsHistory={receiptsHistory} appointments={appointments} />}
           {page === "leads" && <Leads leads={leads} setLeads={setLeads} />}
           {page === "documents_bank" && <DocumentsBank docBank={docBank} addDocToBank={addDocToBank} removeDocFromBank={removeDocFromBank} showNotification={showNotification} />}
@@ -1588,16 +1600,23 @@ ${styleExamples ? `להלן דוגמאות לסגנון הכתיבה של הקל
 
 // ── Sidebar ────────────────────────────────────────────────────────
 function Sidebar({ page, setPage, leadsCount }) {
+  const patientsSubPages = ["patients_list","receipts","patients_archive"];
+  const isPatientsSection = patientsSubPages.includes(page) || page === "patients" || page === "patient_detail";
+
   const nav = [
     { id:"dashboard",       icon:"🏠", label:"ראשי" },
     { id:"calendar",        icon:"📅", label:"יומן" },
-    { id:"patients",        icon:"👥", label:"מטופלים" },
+    { id:"patients",        icon:"👥", label:"מטופלים", sub:[
+      { id:"patients_list",     icon:"👥", label:"ניהול מטופלים" },
+      { id:"receipts",          icon:"🧾", label:"חשבוניות" },
+      { id:"patients_archive",  icon:"📦", label:"ארכיון" },
+    ]},
     { id:"leads",           icon:"⏳", label:"המתנה" },
-    { id:"receipts",        icon:"🧾", label:"קבלות" },
     { id:"finance",         icon:"📊", label:"כספים" },
     { id:"documents_bank",  icon:"📚", label:"מסמכים" },
     { id:"settings",        icon:"⚙️", label:"הגדרות" },
   ];
+
   return (
     <aside className="sidebar">
       <div className="sidebar-logo">
@@ -1605,23 +1624,40 @@ function Sidebar({ page, setPage, leadsCount }) {
         <p>קלינאות תקשורת</p>
       </div>
       {nav.map(n => (
-        <div key={n.id} className={`nav-item ${page === n.id || (page==="patient_detail" && n.id==="patients") ? "active":""}`}
-          onClick={() => setPage(n.id)} style={{position:"relative"}}>
-          <span className="nav-icon">{n.icon}</span>{n.label}
-          {n.id === "leads" && leadsCount > 0 && (
-            <span style={{
-              position:"absolute", top:6, left:8,
-              background:"#E53935", color:"white",
-              borderRadius:"50%", minWidth:18, height:18,
-              display:"flex", alignItems:"center", justifyContent:"center",
-              fontSize:"0.65rem", fontWeight:700, padding:"0 3px"
-            }}>{leadsCount}</span>
+        <div key={n.id}>
+          <div className={`nav-item ${(page === n.id || (n.id==="patients" && isPatientsSection) || (page==="patient_detail" && n.id==="patients")) ? "active":""}`}
+            onClick={() => setPage(n.sub ? n.sub[0].id : n.id)}
+            style={{position:"relative"}}>
+            <span className="nav-icon">{n.icon}</span>{n.label}
+            {n.id === "leads" && leadsCount > 0 && (
+              <span style={{
+                position:"absolute", top:6, left:8,
+                background:"#E53935", color:"white",
+                borderRadius:"50%", minWidth:18, height:18,
+                display:"flex", alignItems:"center", justifyContent:"center",
+                fontSize:"0.65rem", fontWeight:700, padding:"0 3px"
+              }}>{leadsCount}</span>
+            )}
+          </div>
+          {/* Sub-tabs */}
+          {n.sub && isPatientsSection && n.id === "patients" && (
+            <div style={{background:"rgba(0,0,0,0.15)",paddingRight:8}}>
+              {n.sub.map(s => (
+                <div key={s.id}
+                  className={`nav-item ${page === s.id || (page === "patient_detail" && s.id === "patients_list") ? "active" : ""}`}
+                  onClick={() => setPage(s.id)}
+                  style={{fontSize:"0.82rem",padding:"9px 20px",borderRight:"2px solid transparent"}}>
+                  <span className="nav-icon" style={{fontSize:"0.9rem"}}>{s.icon}</span>{s.label}
+                </div>
+              ))}
+            </div>
           )}
         </div>
       ))}
     </aside>
   );
 }
+
 
 // ── Dashboard ──────────────────────────────────────────────────────
 function Dashboard({ patients, appointments, openModal, sendWhatsApp }) {
@@ -2706,6 +2742,111 @@ function DocumentsBank({ docBank, addDocToBank, removeDocFromBank, showNotificat
 }
 
 
+
+
+// ── Patients Archive ──────────────────────────────────────────────
+function PatientsArchive({ patients, receiptsHistory, onRestore }) {
+  const [selectedPatient, setSelectedPatient] = useState(null);
+  const [search, setSearch] = useState("");
+
+  const filtered = patients.filter(p =>
+    (p.name||"").includes(search) || (p.diagnosis||"").includes(search)
+  );
+
+  const patientReceipts = selectedPatient
+    ? (receiptsHistory||[]).filter(r => r.patient_id === selectedPatient.id || r.patient_name === selectedPatient.name)
+    : [];
+
+  return (
+    <>
+      <h1 className="page-title">📦 ארכיון מטופלים</h1>
+
+      {!selectedPatient ? (
+        <div className="card">
+          <input className="field" placeholder="🔍 חיפוש..." value={search}
+            onChange={e => setSearch(e.target.value)} style={{marginBottom:16}} />
+          {filtered.length === 0 && (
+            <p className="text-soft" style={{textAlign:"center",padding:20}}>
+              {patients.length === 0 ? "הארכיון ריק" : "לא נמצאו תוצאות"}
+            </p>
+          )}
+          {filtered.map(p => (
+            <div key={p.id} onClick={() => setSelectedPatient(p)}
+              style={{display:"flex",alignItems:"center",gap:12,padding:"12px 0",
+                borderBottom:"1px solid var(--warm)",cursor:"pointer"}}>
+              <div className="patient-avatar" style={{opacity:0.6}}>{(p.name||"?")[0]}</div>
+              <div style={{flex:1}}>
+                <div style={{fontWeight:500}}>{p.name}</div>
+                <div style={{fontSize:"0.75rem",color:"var(--text-soft)"}}>{p.diagnosis}</div>
+              </div>
+              <div style={{fontSize:"0.72rem",color:"var(--text-soft)"}}>
+                {p.sessions} טיפולים
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <>
+          <button className="btn btn-secondary btn-sm" onClick={() => setSelectedPatient(null)}
+            style={{marginBottom:16}}>← חזרה לארכיון</button>
+
+          <div className="card" style={{marginBottom:12}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
+              <div>
+                <h3 style={{margin:0}}>{selectedPatient.name}</h3>
+                <div style={{fontSize:"0.82rem",color:"var(--text-soft)",marginTop:4}}>
+                  {selectedPatient.diagnosis} · גיל {selectedPatient.age}
+                </div>
+              </div>
+              <button className="btn btn-primary btn-sm" onClick={() => {
+                onRestore(selectedPatient.id);
+                setSelectedPatient(null);
+              }}>♻️ שחזר מטופל</button>
+            </div>
+          </div>
+
+          {/* Sessions history */}
+          <div className="card" style={{marginBottom:12}}>
+            <div style={{fontWeight:600,color:"var(--sage-dark)",marginBottom:12}}>📋 סיכומי טיפולים ({(selectedPatient.history||[]).length})</div>
+            {(selectedPatient.history||[]).length === 0 ? (
+              <p className="text-soft">אין סיכומים</p>
+            ) : (
+              (selectedPatient.history||[]).map((h,i) => (
+                <div key={i} style={{borderBottom:"1px solid var(--warm)",paddingBottom:10,marginBottom:10}}>
+                  <div style={{fontSize:"0.75rem",color:"var(--text-soft)",marginBottom:4}}>📅 {h.date}</div>
+                  <div style={{fontSize:"0.85rem"}}>{h.summary}</div>
+                </div>
+              ))
+            )}
+          </div>
+
+          {/* Receipts */}
+          <div className="card">
+            <div style={{fontWeight:600,color:"var(--sage-dark)",marginBottom:12}}>🧾 חשבוניות ({patientReceipts.length})</div>
+            {patientReceipts.length === 0 ? (
+              <p className="text-soft">אין חשבוניות</p>
+            ) : (
+              patientReceipts.map((r,i) => (
+                <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",
+                  borderBottom:"1px solid var(--warm)",paddingBottom:8,marginBottom:8}}>
+                  <div>
+                    <div style={{fontSize:"0.82rem",fontWeight:500}}>₪{r.amount}</div>
+                    <div style={{fontSize:"0.72rem",color:"var(--text-soft)"}}>
+                      {new Date(r.created_at).toLocaleDateString("he-IL")} · {r.method}
+                    </div>
+                    {r.receipt_number && <div style={{fontSize:"0.68rem",color:"var(--text-soft)"}}>מס׳ {r.receipt_number}</div>}
+                  </div>
+                  <div style={{fontSize:"0.72rem",padding:"3px 8px",borderRadius:20,
+                    background:"#E8F5E8",color:"#2E7D32",fontWeight:500}}>✅ שולם</div>
+                </div>
+              ))
+            )}
+          </div>
+        </>
+      )}
+    </>
+  );
+}
 
 // ── Leads ─────────────────────────────────────────────────────────
 function Leads({ leads, setLeads }) {
