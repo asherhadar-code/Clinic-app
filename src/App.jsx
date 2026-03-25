@@ -1742,14 +1742,11 @@ function useHebrewCalendar(weekDates) {
 
   const getHebrewDate = (date) => {
     try {
-      // Get day as Hebrew letters
-      const dayNum = new Intl.DateTimeFormat("he-IL-u-ca-hebrew", {
-        day: "numeric"
-      }).format(date);
-      const monthName = new Intl.DateTimeFormat("he-IL-u-ca-hebrew", {
-        month: "long"
-      }).format(date);
-      return `${dayNum} ${monthName}`;
+      const heLetters = ["","א׳","ב׳","ג׳","ד׳","ה׳","ו׳","ז׳","ח׳","ט׳","י׳","י״א","י״ב","י״ג","י״ד","ט״ו","ט״ז","י״ז","י״ח","י״ט","כ׳","כ״א","כ״ב","כ״ג","כ״ד","כ״ה","כ״ו","כ״ז","כ״ח","כ״ט","ל׳"];
+      const monthName = new Intl.DateTimeFormat("he-IL-u-ca-hebrew", { month: "long" }).format(date);
+      const dayNum = parseInt(new Intl.DateTimeFormat("he-IL-u-ca-hebrew", { day: "numeric" }).format(date).replace(/[^\d]/g,""));
+      const dayHe = heLetters[dayNum] || dayNum;
+      return `${dayHe} ${monthName}`;
     } catch { return ""; }
   };
 
@@ -1797,7 +1794,7 @@ function Calendar({ patients, appointments, setAppointments, openModal, sendWhat
   // Get appointments for a specific date
   const getDateBlocks = (dateStr) => {
     return (appointments || [])
-      .filter(a => a.date === dateStr)
+      .filter(a => a.date && a.date === dateStr)
       .sort((a,b) => (a.start_time||"") > (b.start_time||"") ? 1 : -1)
       .map(a => ({
         id: a.id,
