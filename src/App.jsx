@@ -180,6 +180,37 @@ const sb = {
       headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json", Prefer: "resolution=merge-duplicates" },
       body: JSON.stringify({ key, value: JSON.stringify(value) })
     });
+  },
+  async getLeads() {
+    if (!SUPABASE_URL || !SUPABASE_KEY) return [];
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/leads?select=*&order=created_at.desc`, {
+      headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` }
+    });
+    if (!res.ok) return [];
+    const data = await res.json();
+    return Array.isArray(data) ? data : [];
+  },
+  async addLead(lead) {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/leads`, {
+      method: "POST",
+      headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json", Prefer: "return=representation" },
+      body: JSON.stringify(lead)
+    });
+    const data = await res.json();
+    return Array.isArray(data) ? data[0] : data;
+  },
+  async updateLead(id, updates) {
+    await fetch(`${SUPABASE_URL}/rest/v1/leads?id=eq.${id}`, {
+      method: "PATCH",
+      headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json" },
+      body: JSON.stringify(updates)
+    });
+  },
+  async deleteLead(id) {
+    await fetch(`${SUPABASE_URL}/rest/v1/leads?id=eq.${id}`, {
+      method: "DELETE",
+      headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` }
+    });
   }
 };
 const GI_KEY    = import.meta.env.VITE_GI_KEY || "";
@@ -860,14 +891,15 @@ export default function App() {
     sb.saveSetting(key, value).catch(() => {});
   };
   const [appointments, setAppointments] = useState([]);
+  const [leads, setLeads] = useState([]);
   const [receiptsHistory, setReceiptsHistory] = useState([]);
   const [patientModal, setPatientModal] = useState(null);
   const [editingPatient, setEditingPatient] = useState(null);
 
   // Load patients, appointments and document bank from Supabase on startup
   useEffect(() => {
-    Promise.all([sb.getPatients(), sb.getAppointments(), sb.getDocumentBank(), sb.getReceipts(), sb.getSettings()])
-      .then(([pData, aData, dData, rData, sData]) => {
+    Promise.all([sb.getPatients(), sb.getAppointments(), sb.getDocumentBank(), sb.getReceipts(), sb.getSettings(), sb.getLeads()])
+      .then(([pData, aData, dData, rData, sData, lData]) => {
         setPatients(Array.isArray(pData) ? pData : []);
         setAppointments(Array.isArray(aData) ? aData : []);
         // Build docBank from flat array
@@ -880,6 +912,7 @@ export default function App() {
         if (sData && Object.keys(sData).length > 0) {
           setSettings(prev => ({ ...prev, ...sData }));
         }
+        setLeads(Array.isArray(lData) ? lData : []);
         setLoading(false);
       })
       .catch(err => {
@@ -1335,6 +1368,7 @@ ${styleExamples ? `להלן דוגמאות לסגנון הכתיבה של הקל
           {page === "receipts" && <Receipts patients={patients} openModal={openModal} receiptsHistory={receiptsHistory} />}
           {page === "settings" && <Settings settings={settings} saveSetting={saveSetting} />}
           {page === "finance" && <Finance receiptsHistory={receiptsHistory} appointments={appointments} />}
+          {page === "leads" && <Leads leads={leads} setLeads={setLeads} />}
           {page === "documents_bank" && <DocumentsBank docBank={docBank} addDocToBank={addDocToBank} removeDocFromBank={removeDocFromBank} showNotification={showNotification} />}
         </main>
       </div>
@@ -1557,6 +1591,7 @@ function Sidebar({ page, setPage }) {
     { id:"dashboard",       icon:"🏠", label:"ראשי" },
     { id:"calendar",        icon:"📅", label:"יומן" },
     { id:"patients",        icon:"👥", label:"מטופלים" },
+    { id:"leads",           icon:"⏳", label:"המתנה" },
     { id:"receipts",        icon:"🧾", label:"קבלות" },
     { id:"finance",         icon:"📊", label:"כספים" },
     { id:"documents_bank",  icon:"📚", label:"מסמכים" },
@@ -2492,6 +2527,198 @@ function DocumentsBank({ docBank, addDocToBank, removeDocFromBank, showNotificat
   );
 }
 
+
+
+// ── Leads ─────────────────────────────────────────────────────────
+function Leads({ leads, setLeads }) {
+  const [selectedLead, setSelectedLead] = useState(null);
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [form, setForm] = useState({ parent_name:"", phone:"", child_age:"", had_diagnosis:"", city:"", notes:"" });
+  const [filter, setFilter] = useState("all"); // all | waiting | handled | closed
+
+  const statusLabel = { waiting:"⏳ ממתין", handled:"✅ טופל", closed:"❌ סגור" };
+  const statusBg = { waiting:"#FFF8E1", handled:"#E8F5E8", closed:"#FBE8E3" };
+  const statusColor = { waiting:"#F57F17", handled:"#2E7D32", closed:"#C4724A" };
+
+  const filtered = leads.filter(l => filter === "all" || l.status === filter);
+
+  const handleAdd = async () => {
+    if (!form.parent_name || !form.phone) return alert("נא למלא שם הורה וטלפון");
+    try {
+      const saved = await sb.addLead({ ...form, status: "waiting", source: "manual" });
+      if (saved && saved.id) {
+        setLeads(prev => [saved, ...prev]);
+        setForm({ parent_name:"", phone:"", child_age:"", had_diagnosis:"", city:"", notes:"" });
+        setShowAddForm(false);
+      }
+    } catch { alert("שגיאה בשמירה"); }
+  };
+
+  const updateStatus = async (id, status) => {
+    await sb.updateLead(id, { status });
+    setLeads(prev => prev.map(l => l.id === id ? { ...l, status } : l));
+    if (selectedLead?.id === id) setSelectedLead(prev => ({ ...prev, status }));
+  };
+
+  const deleteLead = async (id) => {
+    if (!confirm("למחוק פנייה זו?")) return;
+    await sb.deleteLead(id);
+    setLeads(prev => prev.filter(l => l.id !== id));
+    setSelectedLead(null);
+  };
+
+  const leadNumber = (lead) => {
+    const idx = [...leads].reverse().findIndex(l => l.id === lead.id);
+    return String(idx + 1).padStart(3, "0");
+  };
+
+  const formatDate = (ts) => {
+    const d = new Date(ts);
+    return d.toLocaleDateString("he-IL") + "  " + d.toLocaleTimeString("he-IL", {hour:"2-digit",minute:"2-digit"});
+  };
+
+  return (
+    <>
+      <div className="top-bar">
+        <h1 className="page-title" style={{marginBottom:0}}>⏳ מטופלים בהמתנה</h1>
+        <button className="btn btn-primary btn-sm" onClick={() => setShowAddForm(true)}>+ הוסף פנייה</button>
+      </div>
+
+      {/* Filter tabs */}
+      <div style={{display:"flex",gap:4,marginBottom:16,background:"var(--warm)",borderRadius:12,padding:4}}>
+        {[{id:"all",label:"הכל"},{id:"waiting",label:"⏳ ממתין"},{id:"handled",label:"✅ טופל"},{id:"closed",label:"❌ סגור"}].map(f => (
+          <div key={f.id} onClick={() => setFilter(f.id)}
+            style={{flex:1,textAlign:"center",padding:"8px 4px",borderRadius:10,cursor:"pointer",
+              fontSize:"0.78rem",fontWeight:filter===f.id?600:400,
+              background:filter===f.id?"white":"transparent",
+              color:filter===f.id?"var(--sage-dark)":"var(--text-soft)",
+              boxShadow:filter===f.id?"0 1px 4px rgba(0,0,0,0.1)":"none",transition:"all 0.15s"}}>
+            {f.label} {f.id==="all" ? `(${leads.length})` : `(${leads.filter(l=>l.status===f.id).length})`}
+          </div>
+        ))}
+      </div>
+
+      {/* Leads list */}
+      <div className="card">
+        {filtered.length === 0 && (
+          <p className="text-soft" style={{textAlign:"center",padding:20}}>אין פניות בקטגוריה זו</p>
+        )}
+        {filtered.map(lead => (
+          <div key={lead.id} onClick={() => setSelectedLead(lead)}
+            style={{display:"flex",alignItems:"center",gap:12,padding:"12px 0",
+              borderBottom:"1px solid var(--warm)",cursor:"pointer",transition:"background 0.15s"}}
+            onMouseEnter={e => e.currentTarget.style.background="var(--cream)"}
+            onMouseLeave={e => e.currentTarget.style.background="transparent"}>
+            <div style={{width:40,height:40,borderRadius:12,background:"var(--sage-light)",
+              display:"flex",alignItems:"center",justifyContent:"center",
+              fontSize:"0.75rem",fontWeight:600,color:"var(--sage-dark)",flexShrink:0}}>
+              #{leadNumber(lead)}
+            </div>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{fontWeight:500,fontSize:"0.9rem"}}>{lead.parent_name || "ללא שם"}</div>
+              <div style={{fontSize:"0.75rem",color:"var(--text-soft)",marginTop:2}}>{formatDate(lead.created_at)}</div>
+            </div>
+            <div style={{fontSize:"0.72rem",padding:"4px 10px",borderRadius:20,fontWeight:500,
+              background:statusBg[lead.status]||"var(--warm)",color:statusColor[lead.status]||"var(--text-soft)"}}>
+              {statusLabel[lead.status]||lead.status}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Lead detail modal */}
+      {selectedLead && (
+        <Modal onClose={() => setSelectedLead(null)}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:16}}>
+            <h3 style={{margin:0}}>📋 פנייה #{leadNumber(selectedLead)}</h3>
+            <div style={{fontSize:"0.72rem",padding:"4px 10px",borderRadius:20,fontWeight:500,
+              background:statusBg[selectedLead.status],color:statusColor[selectedLead.status]}}>
+              {statusLabel[selectedLead.status]}
+            </div>
+          </div>
+
+          <div style={{fontSize:"0.75rem",color:"var(--text-soft)",marginBottom:16}}>
+            📅 {formatDate(selectedLead.created_at)}
+          </div>
+
+          <div style={{display:"flex",flexDirection:"column",gap:10,marginBottom:16}}>
+            <div style={{display:"flex",gap:8}}>
+              <span style={{fontSize:"0.8rem",color:"var(--text-soft)",minWidth:100}}>שם הורה:</span>
+              <span style={{fontSize:"0.85rem",fontWeight:500}}>{selectedLead.parent_name || "—"}</span>
+            </div>
+            <div style={{display:"flex",gap:8,alignItems:"center"}}>
+              <span style={{fontSize:"0.8rem",color:"var(--text-soft)",minWidth:100}}>טלפון:</span>
+              <a href={`https://wa.me/972${selectedLead.phone?.replace(/^0/,"").replace(/-/g,"")}`}
+                target="_blank" rel="noreferrer"
+                style={{fontSize:"0.85rem",fontWeight:500,color:"var(--sage-dark)",
+                  display:"flex",alignItems:"center",gap:4,textDecoration:"none"}}>
+                📱 {selectedLead.phone}
+                <span style={{fontSize:"0.7rem",background:"#25D366",color:"white",
+                  padding:"2px 6px",borderRadius:8}}>וואטסאפ</span>
+              </a>
+            </div>
+            <div style={{display:"flex",gap:8}}>
+              <span style={{fontSize:"0.8rem",color:"var(--text-soft)",minWidth:100}}>גיל הילד:</span>
+              <span style={{fontSize:"0.85rem",fontWeight:500}}>{selectedLead.child_age || "—"}</span>
+            </div>
+            <div style={{display:"flex",gap:8}}>
+              <span style={{fontSize:"0.8rem",color:"var(--text-soft)",minWidth:100}}>אבחון קודם:</span>
+              <span style={{fontSize:"0.85rem",fontWeight:500}}>{selectedLead.had_diagnosis || "—"}</span>
+            </div>
+            <div style={{display:"flex",gap:8}}>
+              <span style={{fontSize:"0.8rem",color:"var(--text-soft)",minWidth:100}}>מאיפה:</span>
+              <span style={{fontSize:"0.85rem",fontWeight:500}}>{selectedLead.city || "—"}</span>
+            </div>
+            {selectedLead.notes && (
+              <div style={{display:"flex",gap:8}}>
+                <span style={{fontSize:"0.8rem",color:"var(--text-soft)",minWidth:100}}>הערות:</span>
+                <span style={{fontSize:"0.85rem"}}>{selectedLead.notes}</span>
+              </div>
+            )}
+          </div>
+
+          <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+            {selectedLead.status !== "handled" && (
+              <button className="btn btn-primary btn-sm" onClick={() => updateStatus(selectedLead.id, "handled")}>✅ סמן כטופל</button>
+            )}
+            {selectedLead.status !== "waiting" && (
+              <button className="btn btn-secondary btn-sm" onClick={() => updateStatus(selectedLead.id, "waiting")}>⏳ החזר להמתנה</button>
+            )}
+            {selectedLead.status !== "closed" && (
+              <button className="btn btn-secondary btn-sm" onClick={() => updateStatus(selectedLead.id, "closed")}>❌ סגור פנייה</button>
+            )}
+            <button className="btn btn-danger btn-sm" onClick={() => deleteLead(selectedLead.id)}>🗑️ מחק</button>
+          </div>
+        </Modal>
+      )}
+
+      {/* Add form modal */}
+      {showAddForm && (
+        <Modal onClose={() => setShowAddForm(false)}>
+          <h3>➕ פנייה חדשה</h3>
+          {[
+            {key:"parent_name", label:"שם הורה *", placeholder:"שם מלא"},
+            {key:"phone", label:"טלפון *", placeholder:"050-0000000"},
+            {key:"child_age", label:"גיל הילד", placeholder:"למשל: 4 שנים"},
+            {key:"had_diagnosis", label:"אבחון קודם?", placeholder:"כן / לא / בתהליך"},
+            {key:"city", label:"מאיפה?", placeholder:"עיר / יישוב"},
+            {key:"notes", label:"הערות", placeholder:"מידע נוסף..."},
+          ].map(f => (
+            <div key={f.key} style={{marginBottom:12}}>
+              <div style={{fontSize:"0.8rem",color:"var(--text-soft)",marginBottom:4}}>{f.label}</div>
+              <input className="field" placeholder={f.placeholder}
+                value={form[f.key]} onChange={e => setForm(prev => ({...prev, [f.key]: e.target.value}))} />
+            </div>
+          ))}
+          <div style={{display:"flex",gap:8,marginTop:16}}>
+            <button className="btn btn-primary" onClick={handleAdd}>שמור פנייה</button>
+            <button className="btn btn-secondary" onClick={() => setShowAddForm(false)}>ביטול</button>
+          </div>
+        </Modal>
+      )}
+    </>
+  );
+}
 
 // ── Finance ───────────────────────────────────────────────────────
 function Finance({ receiptsHistory, appointments }) {
