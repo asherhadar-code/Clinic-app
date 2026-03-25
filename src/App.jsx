@@ -1376,7 +1376,7 @@ ${styleExamples ? `להלן דוגמאות לסגנון הכתיבה של הקל
               onDelete={() => deletePatient(selectedPatient.id)} />}
           {page === "receipts" && <Receipts patients={patients.filter(p => !p.archived)} openModal={openModal} receiptsHistory={receiptsHistory} />}
           {page === "settings" && <Settings settings={settings} saveSetting={saveSetting} />}
-          {page === "patients_archive" && <PatientsArchive patients={patients.filter(p => p.archived)} receiptsHistory={receiptsHistory} onRestore={(id) => {
+          {page === "patients_archive" && <PatientsArchive patients={patients.filter(p => p.archived)} receiptsHistory={receiptsHistory} openAiChat={openAiChat} onRestore={(id) => {
             sb.archivePatient(id, false);
             setPatients(prev => prev.map(p => p.id === id ? {...p, archived: false} : p));
           }} />}
@@ -2752,7 +2752,7 @@ function DocumentsBank({ docBank, addDocToBank, removeDocFromBank, showNotificat
 
 
 // ── Patients Archive ──────────────────────────────────────────────
-function PatientsArchive({ patients, receiptsHistory, onRestore }) {
+function PatientsArchive({ patients, receiptsHistory, onRestore, openAiChat }) {
   const [selectedPatient, setSelectedPatient] = useState(null);
   const [search, setSearch] = useState("");
 
@@ -2805,10 +2805,13 @@ function PatientsArchive({ patients, receiptsHistory, onRestore }) {
                   {selectedPatient.diagnosis} · גיל {selectedPatient.age}
                 </div>
               </div>
-              <button className="btn btn-primary btn-sm" onClick={() => {
-                onRestore(selectedPatient.id);
-                setSelectedPatient(null);
-              }}>♻️ שחזר מטופל</button>
+              <div style={{display:"flex",gap:8}}>
+                <button className="btn btn-secondary btn-sm" onClick={() => openAiChat(selectedPatient)}>🤖 עוזר AI</button>
+                <button className="btn btn-primary btn-sm" onClick={() => {
+                  onRestore(selectedPatient.id);
+                  setSelectedPatient(null);
+                }}>♻️ שחזר מטופל</button>
+              </div>
             </div>
           </div>
 
