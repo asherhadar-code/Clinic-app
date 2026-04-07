@@ -230,33 +230,41 @@ const CSS = `
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
-  --cream: #FDF8F3;
-  --warm: #F0E6D8;
-  --sage: #7BA05B;
-  --sage-light: #C8DEB8;
-  --sage-dark: #4A7240;
-  --terracotta: #D4714A;
-  --peach: #F5E6D3;
-  --peach-dark: #E8C9A8;
-  --lavender: #E8E0F0;
-  --text: #2A2420;
-  --text-soft: #7A6B60;
+  --bg: #F4F7FF;
+  --cream: #FFFFFF;
+  --warm: #EEF2FF;
+  --sage: #6C63FF;
+  --sage-light: #C5C1FF;
+  --sage-dark: #4B44CC;
+  --terracotta: #FF6B6B;
+  --peach: #FFE8E8;
+  --peach-dark: #FFCDD2;
+  --mint: #E8FFF4;
+  --mint-dark: #00C97B;
+  --yellow: #FFF8E1;
+  --yellow-dark: #FFB300;
+  --text: #1A1D2E;
+  --text-soft: #6B7280;
   --white: #FFFFFF;
-  --shadow: 0 4px 24px rgba(74,114,64,0.10);
-  --shadow-hover: 0 8px 32px rgba(74,114,64,0.18);
-  --radius: 18px;
-  --radius-sm: 12px;
+  --shadow: 0 4px 24px rgba(108,99,255,0.10);
+  --shadow-hover: 0 12px 40px rgba(108,99,255,0.20);
+  --radius: 20px;
+  --radius-sm: 14px;
 }
 
 body {
-  font-family: 'DM Sans', sans-serif;
-  background: var(--cream);
+  font-family: 'Plus Jakarta Sans', 'DM Sans', sans-serif;
+  background: var(--bg);
   color: var(--text);
   min-height: 100vh;
   direction: rtl;
 }
 
-h1,h2,h3,h4 { font-family: 'Fraunces', serif; font-weight: 300; }
+h1,h2,h3,h4 { 
+  font-family: 'Plus Jakarta Sans', 'Fraunces', serif; 
+  font-weight: 700; 
+  letter-spacing: -0.5px;
+}
 
 .app {
   display: flex;
@@ -265,47 +273,62 @@ h1,h2,h3,h4 { font-family: 'Fraunces', serif; font-weight: 300; }
 
 /* ── Sidebar ── */
 .sidebar {
-  width: 230px;
-  background: linear-gradient(180deg, #3D6B33 0%, #4A7240 60%, #5A8A50 100%);
-  color: var(--cream);
+  width: 240px;
+  background: linear-gradient(160deg, #1A1D2E 0%, #2D2B55 50%, #1A1D2E 100%);
+  color: white;
   display: flex;
   flex-direction: column;
   padding: 28px 0;
   flex-shrink: 0;
-  box-shadow: 4px 0 20px rgba(74,114,64,0.15);
+  box-shadow: 6px 0 30px rgba(26,29,46,0.25);
 }
 .sidebar-logo {
-  padding: 0 24px 28px;
-  border-bottom: 1px solid rgba(255,255,255,0.12);
-  margin-bottom: 12px;
+  padding: 0 20px 24px;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+  margin-bottom: 16px;
 }
 .sidebar-logo h2 { 
-  font-size: 1.4rem; color: white; line-height: 1.3;
-  text-shadow: 0 1px 3px rgba(0,0,0,0.2);
+  font-size: 1.6rem; 
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-weight: 800;
+  color: white;
+  letter-spacing: -1px;
+  background: linear-gradient(135deg, #fff 0%, #C5C1FF 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
 }
-.sidebar-logo p { font-size: 0.72rem; opacity: 0.7; margin-top: 4px; letter-spacing: 0.3px; }
+.sidebar-logo p { 
+  font-size: 0.68rem; 
+  color: rgba(255,255,255,0.4); 
+  margin-top: 3px; 
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  font-weight: 500;
+}
 
 .nav-item {
-  display: flex; align-items: center; gap: 10px;
-  padding: 11px 24px;
+  display: flex; align-items: center; gap: 12px;
+  padding: 11px 16px;
   cursor: pointer;
-  font-size: 0.88rem;
+  font-size: 0.85rem;
   transition: all 0.2s;
-  border-right: 3px solid transparent;
-  margin: 1px 8px;
-  border-radius: 10px;
+  border-radius: 12px;
+  margin: 2px 12px;
+  color: rgba(255,255,255,0.6);
+  font-weight: 500;
 }
 .nav-item:hover { 
-  background: rgba(255,255,255,0.12);
-  transform: translateX(-2px);
+  background: rgba(108,99,255,0.15);
+  color: white;
 }
 .nav-item.active {
-  background: rgba(255,255,255,0.2);
-  border-right-color: #C8DEB8;
+  background: linear-gradient(135deg, rgba(108,99,255,0.3), rgba(108,99,255,0.15));
+  color: white;
   font-weight: 600;
-  box-shadow: inset 0 1px 0 rgba(255,255,255,0.1);
+  box-shadow: 0 0 0 1px rgba(108,99,255,0.4);
 }
-.nav-icon { font-size: 1.15rem; }
+.nav-icon { font-size: 1.1rem; width: 20px; text-align: center; }
 
 /* ── Main ── */
 .main {
@@ -364,10 +387,11 @@ h1,h2,h3,h4 { font-family: 'Fraunces', serif; font-weight: 300; }
 
 .page-title {
   font-size: 2rem;
-  color: var(--sage-dark);
-  margin-bottom: 28px;
-  font-weight: 300;
-  letter-spacing: -0.5px;
+  color: var(--text);
+  margin-bottom: 24px;
+  font-weight: 800;
+  letter-spacing: -1px;
+  font-family: 'Plus Jakarta Sans', sans-serif;
 }
 
 /* ── Cards ── */
@@ -375,20 +399,21 @@ h1,h2,h3,h4 { font-family: 'Fraunces', serif; font-weight: 300; }
   background: var(--white);
   border-radius: var(--radius);
   padding: 24px;
-  box-shadow: var(--shadow);
+  box-shadow: 0 2px 16px rgba(26,29,46,0.06);
   margin-bottom: 20px;
-  border: 1px solid rgba(200,222,184,0.3);
-  transition: box-shadow 0.2s;
+  border: 1px solid rgba(108,99,255,0.08);
+  transition: all 0.25s;
 }
-.card:hover { box-shadow: var(--shadow-hover); }
+.card:hover { box-shadow: var(--shadow-hover); border-color: rgba(108,99,255,0.2); }
 .card-title {
-  font-size: 1.1rem;
-  color: var(--sage-dark);
+  font-size: 1rem;
+  color: var(--text);
   margin-bottom: 16px;
   display: flex;
   align-items: center;
   gap: 8px;
-  font-weight: 600;
+  font-weight: 700;
+  letter-spacing: -0.3px;
 }
 
 /* ── Dashboard stats ── */
@@ -399,27 +424,29 @@ h1,h2,h3,h4 { font-family: 'Fraunces', serif; font-weight: 300; }
   margin-bottom: 24px;
 }
 .stat-card {
-  background: linear-gradient(135deg, var(--white) 0%, var(--peach) 100%);
+  background: var(--white);
   border-radius: var(--radius);
   padding: 22px;
   box-shadow: var(--shadow);
   text-align: center;
-  border: 1px solid var(--warm);
-  transition: all 0.2s;
+  border: 1px solid rgba(108,99,255,0.08);
+  transition: all 0.25s;
   position: relative;
   overflow: hidden;
 }
-.stat-card::before {
-  content: '';
-  position: absolute;
-  top: -20px; right: -20px;
-  width: 80px; height: 80px;
-  background: rgba(123,160,91,0.08);
-  border-radius: 50%;
+.stat-card:nth-child(1) { background: linear-gradient(135deg, #EEF2FF, #E8EDFF); }
+.stat-card:nth-child(2) { background: linear-gradient(135deg, #E8FFF4, #D4F7E8); }
+.stat-card:nth-child(3) { background: linear-gradient(135deg, #FFF8E1, #FFF0CC); }
+.stat-card:nth-child(4) { background: linear-gradient(135deg, #FFE8E8, #FFD6D6); }
+.stat-card:hover { transform: translateY(-4px); box-shadow: var(--shadow-hover); }
+.stat-num { 
+  font-family: 'Plus Jakarta Sans', sans-serif; 
+  font-size: 2.8rem; 
+  color: var(--text); 
+  font-weight: 800;
+  letter-spacing: -2px;
 }
-.stat-card:hover { transform: translateY(-3px); box-shadow: var(--shadow-hover); }
-.stat-num { font-family: 'Fraunces', serif; font-size: 2.6rem; color: var(--sage-dark); font-weight: 400; }
-.stat-label { font-size: 0.78rem; color: var(--text-soft); margin-top: 6px; letter-spacing: 0.2px; }
+.stat-label { font-size: 0.76rem; color: var(--text-soft); margin-top: 6px; font-weight: 500; letter-spacing: 0.3px; }
 
 /* ── Calendar ── */
 .week-grid {
@@ -488,13 +515,14 @@ h1,h2,h3,h4 { font-family: 'Fraunces', serif; font-weight: 300; }
 .patient-avatar {
   width: 46px; height: 46px;
   border-radius: 14px;
-  background: linear-gradient(135deg, var(--sage-light), var(--peach));
+  background: linear-gradient(135deg, #6C63FF, #9B95FF);
   display: flex; align-items: center; justify-content: center;
-  font-family: 'Fraunces', serif;
-  font-size: 1.2rem;
-  color: var(--sage-dark);
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: white;
   flex-shrink: 0;
-  box-shadow: 0 2px 6px rgba(74,114,64,0.15);
+  box-shadow: 0 4px 12px rgba(108,99,255,0.3);
 }
 .patient-info { flex: 1; }
 .patient-name { font-weight: 500; }
@@ -528,8 +556,13 @@ h1,h2,h3,h4 { font-family: 'Fraunces', serif; font-weight: 300; }
   transition: background 0.15s, color 0.15s;
   color: var(--text-soft);
 }
-.tab.active { background: var(--sage-dark); color: var(--white); }
-.tab:not(.active):hover { background: var(--warm); }
+.tab.active { 
+  background: linear-gradient(135deg, #6C63FF, #8B85FF); 
+  color: white;
+  box-shadow: 0 4px 12px rgba(108,99,255,0.3);
+  font-weight: 600;
+}
+.tab:not(.active):hover { background: var(--warm); color: var(--text); }
 
 .session-list { display: flex; flex-direction: column; gap: 12px; }
 .session-item {
@@ -582,23 +615,31 @@ h1,h2,h3,h4 { font-family: 'Fraunces', serif; font-weight: 300; }
   transition: all 0.2s;
 }
 .btn-primary { 
-  background: linear-gradient(135deg, var(--sage-dark), var(--sage));
-  color: var(--white);
-  box-shadow: 0 2px 8px rgba(74,114,64,0.3);
+  background: linear-gradient(135deg, #6C63FF, #8B85FF);
+  color: white;
+  box-shadow: 0 4px 15px rgba(108,99,255,0.4);
+  font-weight: 600;
 }
 .btn-primary:hover { 
-  background: linear-gradient(135deg, #3A6030, var(--sage-dark));
-  box-shadow: 0 4px 12px rgba(74,114,64,0.4);
-  transform: translateY(-1px);
+  background: linear-gradient(135deg, #5A52DD, #6C63FF);
+  box-shadow: 0 6px 20px rgba(108,99,255,0.5);
+  transform: translateY(-2px);
 }
 .btn-secondary { 
-  background: var(--warm); color: var(--text);
-  border: 1px solid var(--peach-dark);
+  background: var(--warm); 
+  color: var(--text);
+  border: 1px solid rgba(108,99,255,0.15);
+  font-weight: 500;
 }
 .btn-secondary:hover { background: var(--sage-light); color: var(--sage-dark); }
-.btn-danger { background: #FBE8E3; color: var(--terracotta); border: 1px solid #F5D0C5; }
-.btn-danger:hover { background: #F5D0C5; }
-.btn-sm { padding: 6px 14px; font-size: 0.8rem; }
+.btn-danger { 
+  background: var(--peach); 
+  color: var(--terracotta); 
+  border: 1px solid var(--peach-dark);
+  font-weight: 500;
+}
+.btn-danger:hover { background: var(--peach-dark); }
+.btn-sm { padding: 6px 14px; font-size: 0.78rem; }
 
 /* ── Textarea / Input ── */
 .field {
@@ -1405,7 +1446,7 @@ ${styleExamples ? `להלן דוגמאות לסגנון הכתיבה של הקל
     <>
       <style>{CSS}</style>
       <div style={{display:"flex",alignItems:"center",justifyContent:"center",height:"100vh",background:"var(--cream)",flexDirection:"column",gap:16}}>
-        <div style={{fontFamily:"Fraunces, serif",fontSize:"2rem",color:"var(--sage-dark)"}}>קליניקה</div>
+        <div style={{fontFamily:"Plus Jakarta Sans, sans-serif",fontSize:"2.5rem",fontWeight:800,letterSpacing:"-2px",background:"linear-gradient(135deg,#6C63FF,#9B95FF)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}}>ClinicUp</div>
         <div style={{display:"flex",gap:6,alignItems:"center",color:"var(--text-soft)",fontSize:"0.85rem"}}>
           <div style={{width:6,height:6,borderRadius:"50%",background:"var(--sage)",animation:"bounce 0.8s infinite"}} />
           <div style={{width:6,height:6,borderRadius:"50%",background:"var(--sage)",animation:"bounce 0.8s 0.2s infinite"}} />
@@ -1681,8 +1722,8 @@ function Sidebar({ page, setPage, leadsCount }) {
   return (
     <aside className="sidebar">
       <div className="sidebar-logo">
-        <h2>קליניקה</h2>
-        <p>קלינאות תקשורת</p>
+        <h2>ClinicUp</h2>
+        <p>CLINIC MANAGEMENT</p>
       </div>
       {nav.map(n => (
         <div key={n.id}>
