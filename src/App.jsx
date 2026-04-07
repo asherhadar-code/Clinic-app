@@ -1723,6 +1723,16 @@ ${styleExamples ? `להלן דוגמאות לסגנון הכתיבה של הקל
           </div>
         </Modal>
       )}
+      {showQuestionnaire && currentPatientForModal && (
+        <QuestionnaireModal
+          patient={currentPatientForModal}
+          onClose={() => setShowQuestionnaire(false)}
+          onSave={(data) => {
+            showNotification("✅ השאלון נשמר בהצלחה!");
+            setShowQuestionnaire(false);
+          }}
+        />
+      )}
     </>
   );
 }
