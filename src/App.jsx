@@ -220,6 +220,23 @@ const sb = {
       method: "DELETE",
       headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` }
     });
+  },
+  async saveQuestionnaire(patientId, data) {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/questionnaires`, {
+      method: "POST",
+      headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json", Prefer: "return=representation" },
+      body: JSON.stringify({ patient_id: patientId, data })
+    });
+    const result = await res.json();
+    return Array.isArray(result) ? result[0] : result;
+  },
+  async getQuestionnaire(patientId) {
+    if (!SUPABASE_URL || !SUPABASE_KEY) return null;
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/questionnaires?patient_id=eq.${patientId}&order=completed_at.desc&limit=1`, {
+      headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` }
+    });
+    const data = await res.json();
+    return Array.isArray(data) && data.length > 0 ? data[0] : null;
   }
 };
 const GI_KEY    = import.meta.env.VITE_GI_KEY || "";
@@ -1100,7 +1117,8 @@ export default function App() {
     }
   };
   const [selectedPatient, setSelectedPatient] = useState(null);
-  const [modal, setModal] = useState(null); // "post_session" | "pre_session" | "receipt" | "report"
+  const [modal, setModal] = useState(null); // "post_session" | "pre_session" | "receipt" | "report" | "questionnaire"
+  const [showQuestionnaire, setShowQuestionnaire] = useState(false);
   const [currentPatientForModal, setCurrentPatientForModal] = useState(null);
   const [sessionNote, setSessionNote] = useState("");
   const [isRecording, setIsRecording] = useState(false);
@@ -1208,6 +1226,11 @@ export default function App() {
   };
 
   const openModal = (type, patient) => {
+    if (type === "questionnaire") {
+      setCurrentPatientForModal(patient);
+      setShowQuestionnaire(true);
+      return;
+    }
     setCurrentPatientForModal(patient);
     setAiText(""); setSessionNote("");
     setModal(type);
@@ -1224,6 +1247,10 @@ export default function App() {
   };
 
   const closeModal = () => setModal(null);
+  const openQuestionnaire = (patient) => {
+    setCurrentPatientForModal(patient);
+    setShowQuestionnaire(true);
+  };
 
   const generatePreSession = async (patient) => {
     setAiLoading(true);
@@ -2388,6 +2415,7 @@ function PatientDetail({ patient, onBack, openModal, generateReport, aiText, aiL
           <button className="btn btn-secondary btn-sm" onClick={() => openModal("post_session", patient)}>📝 סיכום אחרי טיפול</button>
           <button className="btn btn-secondary btn-sm" onClick={() => openModal("reminder", patient)}>🔔 תזכורת</button>
           <button className="btn btn-secondary btn-sm" onClick={() => openAiChat(patient)}>🤖 עוזר AI</button>
+          <button className="btn btn-secondary btn-sm" onClick={() => openModal("questionnaire", patient)}>📋 שאלון הורים</button>
           <button className="btn btn-danger btn-sm" onClick={() => openModal("receipt", patient)}>🧾 הפק חשבונית</button>
         </div>
         <div style={{display:"flex",gap:8}}>
@@ -3491,6 +3519,366 @@ function Settings({ settings, saveSetting }) {
         )}
       </div>
     </>
+  );
+}
+
+
+// ── Questionnaire Modal ───────────────────────────────────────────
+function QuestionnaireModal({ patient, onClose, onSave }) {
+  const [step, setStep] = useState(0);
+  const [form, setForm] = useState({});
+  const [saving, setSaving] = useState(false);
+
+  const set = (key, val) => setForm(prev => ({ ...prev, [key]: val }));
+
+  // Helper components
+  const YesNo = ({ k, label }) => (
+    <div style={{marginBottom:16}}>
+      <div style={{fontSize:"0.85rem",fontWeight:500,marginBottom:8}}>{label}</div>
+      <div style={{display:"flex",gap:8}}>
+        {["כן","לא"].map(v => (
+          <button key={v} onClick={() => set(k, v)}
+            style={{padding:"8px 24px",borderRadius:12,border:"2px solid",cursor:"pointer",fontFamily:"inherit",fontSize:"0.85rem",fontWeight:500,
+              borderColor: form[k]===v ? "var(--sage)" : "var(--warm)",
+              background: form[k]===v ? "var(--sage)" : "white",
+              color: form[k]===v ? "white" : "var(--text-soft)",
+              transition:"all 0.15s"}}>
+            {v}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+
+  const Select = ({ k, label, options, withOther }) => (
+    <div style={{marginBottom:16}}>
+      <div style={{fontSize:"0.85rem",fontWeight:500,marginBottom:8}}>{label}</div>
+      <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+        {options.map(v => (
+          <button key={v} onClick={() => set(k, v)}
+            style={{padding:"7px 14px",borderRadius:20,border:"1.5px solid",cursor:"pointer",fontFamily:"inherit",fontSize:"0.82rem",
+              borderColor: form[k]===v ? "var(--sage)" : "var(--warm)",
+              background: form[k]===v ? "var(--sage)" : "white",
+              color: form[k]===v ? "white" : "var(--text-soft)",
+              transition:"all 0.15s"}}>
+            {v}
+          </button>
+        ))}
+        {withOther && (
+          <button onClick={() => set(k, "אחר")}
+            style={{padding:"7px 14px",borderRadius:20,border:"1.5px solid",cursor:"pointer",fontFamily:"inherit",fontSize:"0.82rem",
+              borderColor: form[k]==="אחר" ? "var(--sage)" : "var(--warm)",
+              background: form[k]==="אחר" ? "var(--sage)" : "white",
+              color: form[k]==="אחר" ? "white" : "var(--text-soft)"}}>
+            אחר
+          </button>
+        )}
+      </div>
+      {form[k]==="אחר" && withOther && (
+        <input className="field" style={{marginTop:8}} placeholder="פרט/י..."
+          value={form[k+"_other"]||""} onChange={e => set(k+"_other", e.target.value)} />
+      )}
+    </div>
+  );
+
+  const MultiSelect = ({ k, label, options }) => {
+    const vals = form[k] || [];
+    const toggle = v => set(k, vals.includes(v) ? vals.filter(x=>x!==v) : [...vals, v]);
+    return (
+      <div style={{marginBottom:16}}>
+        <div style={{fontSize:"0.85rem",fontWeight:500,marginBottom:8}}>{label}</div>
+        <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+          {options.map(v => (
+            <button key={v} onClick={() => toggle(v)}
+              style={{padding:"7px 14px",borderRadius:20,border:"1.5px solid",cursor:"pointer",fontFamily:"inherit",fontSize:"0.82rem",
+                borderColor: vals.includes(v) ? "var(--sage)" : "var(--warm)",
+                background: vals.includes(v) ? "var(--sage)" : "white",
+                color: vals.includes(v) ? "white" : "var(--text-soft)",
+                transition:"all 0.15s"}}>
+              {v}
+            </button>
+          ))}
+        </div>
+      </div>
+    );
+  };
+
+  const Text = ({ k, label, placeholder, rows=1 }) => (
+    <div style={{marginBottom:16}}>
+      <div style={{fontSize:"0.85rem",fontWeight:500,marginBottom:6}}>{label}</div>
+      {rows > 1
+        ? <textarea className="field" rows={rows} placeholder={placeholder||""}
+            value={form[k]||""} onChange={e => set(k, e.target.value)} />
+        : <input className="field" placeholder={placeholder||""}
+            value={form[k]||""} onChange={e => set(k, e.target.value)} />
+      }
+    </div>
+  );
+
+  const steps = [
+    {
+      title: "פרטים אישיים",
+      icon: "👤",
+      content: (
+        <>
+          <Text k="child_name" label="שם הילד/ה (פרטי + משפחה)" placeholder="שם מלא" />
+          <Text k="birth_date" label="תאריך לידה" placeholder="DD/MM/YYYY" />
+          <Select k="gender" label="מין" options={["זכר","נקבה"]} />
+          <Text k="parent_name" label="שם ההורה/אפוטרופוס" placeholder="שם מלא" />
+          <Text k="phone" label="טלפון" placeholder="050-0000000" />
+          <Text k="email" label="מייל" placeholder="example@gmail.com" />
+          <Text k="address" label="כתובת" placeholder="רחוב, עיר" />
+        </>
+      )
+    },
+    {
+      title: "מסגרת חינוכית",
+      icon: "🏫",
+      content: (
+        <>
+          <YesNo k="has_framework" label="האם הילד/ה במסגרת חינוכית?" />
+          {form.has_framework === "כן" && (
+            <>
+              <Text k="framework_name" label="שם המסגרת" placeholder="שם הגן/בית הספר" />
+              <Select k="framework_type" label="סוג המסגרת" withOther
+                options={["משפחתון","גן רגיל","גן שפה","כיתה קטנה","בית ספר","גן תקשורת"]} />
+              <Text k="teacher_name" label="שם הגננת/מורה" placeholder="שם מלא" />
+              <MultiSelect k="professional_support" label="ליווי מקצועי במסגרת"
+                options={["סייעת","קלינאי/ת תקשורת","מרפא/ה בעיסוק","פסיכולוג/ית","אין ליווי"]} />
+              <Text k="framework_report" label="מה דיווחו אנשי המסגרת?" placeholder="תאר/י..." rows={3} />
+            </>
+          )}
+        </>
+      )
+    },
+    {
+      title: "רקע רפואי — היריון ולידה",
+      icon: "🏥",
+      content: (
+        <>
+          <YesNo k="normal_pregnancy" label="האם ההיריון היה תקין?" />
+          {form.normal_pregnancy === "לא" && (
+            <Text k="pregnancy_details" label="פרט/י" rows={2} placeholder="תאר/י את הסיבוך..." />
+          )}
+          <Text k="birth_week" label="שבוע לידה" placeholder="למשל: 38" />
+          <Text k="birth_weight" label="משקל לידה" placeholder="למשל: 3.2 ק״ג" />
+          <YesNo k="birth_complication" label="האם היה סיבוך בלידה?" />
+          {form.birth_complication === "כן" && (
+            <Text k="birth_complication_details" label="פרט/י" rows={2} placeholder="תאר/י..." />
+          )}
+          <YesNo k="hospitalized_after_birth" label="האם הילד/ה אושפז/ה לאחר הלידה?" />
+          {form.hospitalized_after_birth === "כן" && (
+            <Text k="hospitalized_reason" label="מדוע?" rows={2} placeholder="סיבת האשפוז..." />
+          )}
+        </>
+      )
+    },
+    {
+      title: "מצב רפואי כללי",
+      icon: "💊",
+      content: (
+        <>
+          <YesNo k="medical_treatments" label="האם הילד/ה עובר/ת טיפולים רפואיים?" />
+          {form.medical_treatments === "כן" && (
+            <Text k="medical_treatments_details" label="אילו טיפולים?" rows={2} placeholder="פרט/י..." />
+          )}
+          <YesNo k="known_diagnoses" label="האם יש אבחנות רפואיות ידועות?" />
+          {form.known_diagnoses === "כן" && (
+            <Text k="diagnoses_details" label="אילו אבחנות?" rows={2} placeholder="פרט/י..." />
+          )}
+          <YesNo k="takes_medication" label="האם הילד/ה נוטל/ת תרופות?" />
+          {form.takes_medication === "כן" && (
+            <Text k="medication_details" label="אילו תרופות?" placeholder="שם התרופה ומינון" />
+          )}
+          <YesNo k="had_surgery" label="האם עבר/ה ניתוחים?" />
+          {form.had_surgery === "כן" && (
+            <Text k="surgery_details" label="פרט/י" placeholder="סוג הניתוח ומתי" />
+          )}
+          <YesNo k="prev_diagnosis" label="האם עבר/ה אבחון קודם?" />
+          {form.prev_diagnosis === "כן" && (
+            <MultiSelect k="prev_diagnosis_type" label="סוג האבחון"
+              options={["פסיכולוג/ית","נוירולוג/ית","קלינאי/ת תקשורת","מרפא/ה בעיסוק","אחר"]} />
+          )}
+        </>
+      )
+    },
+    {
+      title: "שמיעה וראיה",
+      icon: "👁️",
+      content: (
+        <>
+          <YesNo k="hearing_tested" label="האם נבדקה שמיעת הילד/ה?" />
+          {form.hearing_tested === "כן" && (
+            <Text k="hearing_result" label="מה הייתה התוצאה?" placeholder="תקין / לא תקין / פרט..." />
+          )}
+          <YesNo k="hearing_problems" label="האם יש בעיות שמיעה ידועות?" />
+          {form.hearing_problems === "כן" && (
+            <Text k="hearing_details" label="פרט/י" rows={2} placeholder="תאר/י..." />
+          )}
+          <YesNo k="vision_tested" label="האם נבדקה ראיית הילד/ה?" />
+          <YesNo k="wears_glasses" label="האם הילד/ה מרכיב/ה משקפיים?" />
+        </>
+      )
+    },
+    {
+      title: "רקע התפתחותי — שפה",
+      icon: "🗣️",
+      content: (
+        <>
+          <Text k="first_word_age" label="באיזה גיל אמר/ה מילה ראשונה?" placeholder="למשל: 12 חודשים" />
+          <Text k="two_words_age" label="באיזה גיל חיבר/ה שתי מילים יחד?" placeholder="למשל: 24 חודשים" />
+          <YesNo k="speaks_sentences" label="האם מדבר/ת כיום במשפטים?" />
+          <YesNo k="understands_simple" label="האם מבין/ה הוראות פשוטות?" />
+          <YesNo k="understands_complex" label="האם מבין/ה הוראות מורכבות?" />
+          <YesNo k="word_regression" label="האם היו מילים שחזר/ה עליהן ואחר כך הפסיק/ה?" />
+          {form.word_regression === "כן" && (
+            <Text k="word_regression_details" label="פרט/י" rows={2} placeholder="תאר/י..." />
+          )}
+        </>
+      )
+    },
+    {
+      title: "מוטוריקה ואכילה",
+      icon: "🏃",
+      content: (
+        <>
+          <Text k="sitting_age" label="באיזה גיל החל/ה לשבת לבד?" placeholder="למשל: 6 חודשים" />
+          <Text k="crawling_age" label="באיזה גיל החל/ה לזחול?" placeholder="למשל: 9 חודשים" />
+          <Text k="walking_age" label="באיזה גיל החל/ה ללכת?" placeholder="למשל: 12 חודשים" />
+          <YesNo k="motor_difficulties" label="האם יש קשיים מוטוריים כיום?" />
+          {form.motor_difficulties === "כן" && (
+            <Text k="motor_details" label="פרט/י" rows={2} placeholder="תאר/י..." />
+          )}
+          <YesNo k="eating_difficulties" label="האם יש קשיים באכילה?" />
+          <YesNo k="selective_eating" label="האם סלקטיבי/ת במזון?" />
+          <YesNo k="infant_feeding_problems" label="האם היו קשיים בינקות (יניקה/בקבוק)?" />
+        </>
+      )
+    },
+    {
+      title: "רקע משפחתי ושפתי",
+      icon: "👨‍👩‍👧",
+      content: (
+        <>
+          <MultiSelect k="home_languages" label="שפות המדוברות בבית"
+            options={["עברית","ערבית","רוסית","אמהרית","אנגלית","צרפתית","אחר"]} />
+          <YesNo k="multilingual" label="האם הילד/ה חשוף/ה ליותר משפה אחת?" />
+          <Select k="sibling_order" label="מיקום בין האחים"
+            options={["בכור/ה","אמצעי/ת","צעיר/ה","יחיד/ה"]} />
+          <YesNo k="sibling_difficulties" label="האם יש אחים/אחיות עם קשיי שפה/התפתחות?" />
+          <YesNo k="family_history" label="האם יש היסטוריה משפחתית של קשיי שפה, לקויות למידה או אוטיזם?" />
+          {form.family_history === "כן" && (
+            <Text k="family_history_details" label="פרט/י" rows={2} placeholder="מי ומה..." />
+          )}
+          <YesNo k="parents_together" label="האם ההורים גרים יחד?" />
+          <Select k="main_language" label="באיזו שפה מדבר/ת הילד/ה בעיקר?"
+            options={["עברית","ערבית","רוסית","אמהרית","אנגלית","אחר"]} withOther />
+          <YesNo k="comprehension_expression_diff" label="האם יש הבדל בין הבנה לבין ביטוי?" />
+        </>
+      )
+    },
+    {
+      title: "התנהגות כללית",
+      icon: "😊",
+      content: (
+        <>
+          <YesNo k="attentive" label="האם הילד/ה קשוב/ה ומרוכז/ת?" />
+          <YesNo k="emotional_regulation" label="האם יש קשיים בוויסות רגשי?" />
+          <YesNo k="sleeps_well" label="האם ישן/ה טוב בלילה?" />
+          <YesNo k="repetitive_behaviors" label="האם יש התנהגויות חזרתיות?" />
+          {form.repetitive_behaviors === "כן" && (
+            <Text k="repetitive_details" label="פרט/י" rows={2} placeholder="תאר/י..." />
+          )}
+          <YesNo k="eye_contact" label="האם יש קשר עין תקין?" />
+          <YesNo k="plays_with_others" label="האם משחק/ת עם ילדים אחרים?" />
+          <YesNo k="anxieties" label="האם יש חרדות בולטות?" />
+          {form.anxieties === "כן" && (
+            <Text k="anxieties_details" label="פרט/י" rows={2} placeholder="תאר/י..." />
+          )}
+        </>
+      )
+    },
+    {
+      title: "תחומי חוזק ושיפור",
+      icon: "⭐",
+      content: (
+        <>
+          <Text k="strengths" label="במה הילד/ה מצטיין/ת?" rows={3} placeholder="תאר/י..." />
+          <Text k="concerns" label="מה מדאיג אתכם ביותר?" rows={3} placeholder="תאר/י..." />
+          <Text k="treatment_expectation" label="מה הציפייה מהטיפול?" rows={3} placeholder="תאר/י..." />
+          <Text k="previous_attempts" label="מה ניסיתם עד כה?" rows={2} placeholder="תאר/י..." />
+          <Text k="additional_info" label="האם יש עוד מידע שחשוב לנו לדעת?" rows={3} placeholder="כל מידע נוסף..." />
+        </>
+      )
+    },
+  ];
+
+  const currentStep = steps[step];
+  const progress = Math.round(((step + 1) / steps.length) * 100);
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      await sb.saveQuestionnaire(patient.id, form);
+      onSave(form);
+    } catch { alert("שגיאה בשמירה"); }
+    setSaving(false);
+  };
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" style={{width:580,maxHeight:"90vh"}} onClick={e => e.stopPropagation()}>
+        
+        {/* Header */}
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+          <div>
+            <div style={{fontSize:"0.75rem",color:"var(--text-soft)",fontWeight:500}}>
+              שלב {step+1} מתוך {steps.length}
+            </div>
+            <h3 style={{margin:0,marginTop:4}}>
+              {currentStep.icon} {currentStep.title}
+            </h3>
+          </div>
+          <span onClick={onClose} style={{cursor:"pointer",fontSize:"1.3rem",color:"var(--text-soft)"}}>✕</span>
+        </div>
+
+        {/* Progress bar */}
+        <div style={{height:6,background:"var(--warm)",borderRadius:10,marginBottom:24,overflow:"hidden"}}>
+          <div style={{height:"100%",width:`${progress}%`,
+            background:"linear-gradient(90deg, var(--sage), var(--sage-dark))",
+            borderRadius:10,transition:"width 0.3s"}} />
+        </div>
+
+        {/* Form content */}
+        <div style={{maxHeight:"55vh",overflowY:"auto",paddingLeft:4}}>
+          {currentStep.content}
+        </div>
+
+        {/* Navigation */}
+        <div style={{display:"flex",justifyContent:"space-between",marginTop:20,paddingTop:16,borderTop:"1px solid var(--warm)"}}>
+          <button className="btn btn-secondary" onClick={() => setStep(s => s-1)} disabled={step===0}>
+            → הקודם
+          </button>
+          <div style={{display:"flex",gap:6}}>
+            {steps.map((_,i) => (
+              <div key={i} onClick={() => setStep(i)}
+                style={{width:8,height:8,borderRadius:"50%",cursor:"pointer",
+                  background: i===step ? "var(--sage-dark)" : i<step ? "var(--sage-light)" : "var(--warm)",
+                  transition:"all 0.2s"}} />
+            ))}
+          </div>
+          {step < steps.length-1 ? (
+            <button className="btn btn-primary" onClick={() => setStep(s => s+1)}>
+              הבא ←
+            </button>
+          ) : (
+            <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
+              {saving ? "שומר..." : "✅ שמור שאלון"}
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
   );
 }
 
