@@ -1291,8 +1291,59 @@ export default function App() {
     closeModal();
   };
 
-  const sendWhatsApp = (patient) => {
-    showNotification(`📱 אישור הגעה נשלח בוואטסאפ ל${patient.name}`);
+  const sendWhatsApp = async (patient, customMessage) => {
+    const instanceId = settings.greenInstanceId;
+    const token = settings.greenToken;
+    const phone = patient.phone;
+
+    if (!instanceId || !token) {
+      showNotification("⚠️ חסרים פרטי Green API בהגדרות");
+      return;
+    }
+    if (!phone) {
+      showNotification("⚠️ אין מספר טלפון למטופל");
+      return;
+    }
+
+    // Build message from template or custom
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const dateStr = tomorrow.toLocaleDateString("he-IL");
+    
+    // Find tomorrow's appointment for this patient
+    const tomorrowApt = appointments.find(a => {
+      const aptDate = new Date(a.date);
+      const tom = new Date();
+      tom.setDate(tom.getDate() + 1);
+      return a.date && aptDate.toDateString() === tom.toDateString() && 
+             (a.patient_id === patient.id || a.patient_name === patient.name);
+    });
+    
+    const timeStr = tomorrowApt?.start_time || "";
+    const template = settings.reminderTemplate || 
+      "שלום {שם} 😊\nמתזכרת לך לטיפול מחר {תאריך} בשעה {שעה}.\nאשמח לאישור הגעה:\n1️⃣ כן, אגיע\n2️⃣ לא אוכל להגיע";
+    
+    const message = customMessage || template
+      .replace("{שם}", patient.firstName || patient.name)
+      .replace("{תאריך}", dateStr)
+      .replace("{שעה}", timeStr);
+
+    showNotification("⏳ שולח הודעה...");
+    try {
+      const res = await fetch("/api/whatsapp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ instanceId, token, phone, message })
+      });
+      const data = await res.json();
+      if (data.success) {
+        showNotification(`✅ הודעה נשלחה ל${patient.name}!`);
+      } else {
+        showNotification(`❌ שגיאה: ${data.error}`);
+      }
+    } catch {
+      showNotification("❌ שגיאה בשליחת הודעה");
+    }
   };
 
   const generateReceipt = async () => {
