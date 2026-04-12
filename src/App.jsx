@@ -1551,7 +1551,9 @@ ${styleExamples ? `להלן דוגמאות לסגנון הכתיבה של הקל
           {notification && <div className="banner">🔔 {notification}</div>}
 
           {page === "dashboard" && <Dashboard patients={patients} appointments={appointments} openModal={openModal} sendWhatsApp={sendWhatsApp} />}
-          {page === "calendar" && <Calendar patients={patients} appointments={appointments} setAppointments={setAppointments} openModal={openModal} sendWhatsApp={sendWhatsApp} settings={settings} />}
+          {page === "calendar" && <Calendar patients={patients} appointments={appointments} setAppointments={setAppointments} openModal={openModal} sendWhatsApp={sendWhatsApp} settings={settings}
+            onSelectPatient={(p) => { setSelectedPatient(p); setPage("patient_detail"); }}
+            onOpenPostSession={(p) => { setCurrentPatientForModal(p); setModal("post_session"); }} />}
           {(page === "patients_list" || page === "patients" || page === "receipts" || page === "patients_archive") && (
             <div>
               {/* Mobile sub-tabs - only shown on mobile */}
@@ -1579,6 +1581,10 @@ ${styleExamples ? `להלן דוגמאות לסגנון הכתיבה של הקל
               {page === "patients_archive" && <PatientsArchive patients={patients.filter(p => p.archived)} receiptsHistory={receiptsHistory} openAiChat={openAiChat} onRestore={(id) => {
                 sb.archivePatient(id, false);
                 setPatients(prev => prev.map(p => p.id === id ? {...p, archived: false} : p));
+              }} onDelete={async (id) => {
+                await sb.deletePatient(id);
+                setPatients(prev => prev.filter(p => p.id !== id));
+                showNotification("🗑️ המטופל נמחק לצמיתות");
               }} />}
             </div>
           )}
@@ -2060,7 +2066,7 @@ function useHebrewCalendar(weekDates) {
   return { holidays, getHebrewDate };
 }
 
-function Calendar({ patients, appointments, setAppointments, openModal, sendWhatsApp, settings }) {
+function Calendar({ patients, appointments, setAppointments, openModal, sendWhatsApp, settings, onSelectPatient, onOpenPostSession }) {
   const [dayStart, setDayStart] = useState("08:30");
   const makeId = () => Math.random().toString(36).slice(2,8);
 
@@ -2132,37 +2138,56 @@ function Calendar({ patients, appointments, setAppointments, openModal, sendWhat
   const [addType, setAddType] = useState("treatment");
   const [breakMins, setBreakMins] = useState(10);
   const [patientQ, setPatientQ] = useState("");
+  const [isRecurring, setIsRecurring] = useState(false);
+  const [recurringWeeks, setRecurringWeeks] = useState(8);
 
   const assignPatientToModal = async (patient) => {
     try {
       const timeline = buildTimeline(addModal.dateStr);
       const insertAfter = timeline[addModal.insertAfterIdx];
       const startTime = insertAfter ? insertAfter.endTime : dayStart;
-      const newApt = await sb.addAppointment({
-        patientId: patient.id,
-        patientName: patient.name,
-        dayIndex: new Date(addModal.dateStr).getDay(),
-        startTime,
-        blockType: "treatment",
-        minutes: 45,
-        date: addModal.dateStr,
-      });
-      if (newApt && newApt.id) {
-        setAppointments(prev => [...prev, {
-          ...newApt,
-          day_index: new Date(addModal.dateStr).getDay(),
-          patient_name: patient.name,
-          patient_id: patient.id,
-          status: "pending",
-          start_time: startTime,
-          date: addModal.dateStr,
-          block_type: "treatment",
-          minutes: 45
-        }]);
+      const dayIdx = new Date(addModal.dateStr).getDay();
+      
+      // Build list of dates to add
+      const dates = [addModal.dateStr];
+      if (isRecurring) {
+        for (let w = 1; w < recurringWeeks; w++) {
+          const d = new Date(addModal.dateStr);
+          d.setDate(d.getDate() + w * 7);
+          dates.push(fmt(d));
+        }
       }
+
+      const newApts = [];
+      for (const date of dates) {
+        const apt = await sb.addAppointment({
+          patientId: patient.id,
+          patientName: patient.name,
+          dayIndex: dayIdx,
+          startTime,
+          blockType: "treatment",
+          minutes: 45,
+          date,
+        });
+        if (apt && apt.id) {
+          newApts.push({
+            ...apt,
+            day_index: dayIdx,
+            patient_name: patient.name,
+            patient_id: patient.id,
+            status: "pending",
+            start_time: startTime,
+            date,
+            block_type: "treatment",
+            minutes: 45
+          });
+        }
+      }
+      setAppointments(prev => [...prev, ...newApts]);
     } catch(e) { console.error(e); }
     setAddModal(null);
     setPatientQ("");
+    setIsRecurring(false);
   };
 
   const addBlock = async (dateStr, insertAfterIdx) => {
@@ -2332,7 +2357,11 @@ function Calendar({ patients, appointments, setAppointments, openModal, sendWhat
                       borderRadius:10, padding:"8px 10px", marginBottom:2, position:"relative"
                     }}>
                       <div style={{fontSize:"0.68rem",color:"var(--text-soft)"}}>{b.startTime}–{b.endTime}</div>
-                      <div style={{fontWeight:600,fontSize:"0.82rem",color:"var(--sage-dark)",marginTop:1}}>{b.patientName}</div>
+                      <div style={{fontWeight:600,fontSize:"0.82rem",color:"var(--sage-dark)",marginTop:1,cursor:"pointer",textDecoration:"underline dotted"}}
+                        onClick={e=>{e.stopPropagation();
+                          const pt = patients.find(p=>p.id===b.patientId||p.name===b.patientName);
+                          if(pt){onSelectPatient(pt);}
+                        }}>{b.patientName}</div>
                       <div style={{fontSize:"0.68rem",marginTop:2,color:
                         b.status==="arrived"?"#2E7D32":b.status==="cancelled"?"#C4724A":b.status==="confirmed"?"#4CAF50":"#FFA000"}}>
                         {b.status==="arrived"?"✅ הגיע":b.status==="cancelled"?"❌ בוטל":b.status==="confirmed"?"✅ אישר":"⏳ ממתין"}
@@ -2359,6 +2388,14 @@ function Calendar({ patients, appointments, setAppointments, openModal, sendWhat
                           style={{flex:1,padding:"3px 0",fontSize:"0.6rem",borderRadius:6,border:"none",
                             background:"var(--warm)",color:"var(--sage-dark)",cursor:"pointer"}}>
                           🔊 סקירה
+                        </button>
+                        <button onClick={e=>{e.stopPropagation();
+                          const pt = patients.find(p=>p.id===b.patientId||p.name===b.patientName);
+                          if(pt) onOpenPostSession(pt);
+                        }}
+                          style={{flex:1,padding:"3px 0",fontSize:"0.6rem",borderRadius:6,border:"none",
+                            background:"linear-gradient(135deg,#6C63FF,#8B85FF)",color:"white",cursor:"pointer"}}>
+                          📝 תיעוד
                         </button>
                       </div>
                       <span onClick={() => removeBlock(dateStr, b.id)}
@@ -2419,10 +2456,10 @@ function Calendar({ patients, appointments, setAppointments, openModal, sendWhat
               </div>
             ) : (
               <div>
-                <p style={{fontSize:"0.8rem",color:"var(--text-soft)",marginBottom:8}}>בחרי מטופל:</p>
+                <p style={{fontSize:"0.8rem",color:"var(--text-soft)",marginBottom:8}}>בחר/י מטופל:</p>
                 <input className="field" placeholder="חיפוש..." value={patientQ}
                   onChange={e => setPatientQ(e.target.value)} style={{marginBottom:10}} />
-                <div style={{maxHeight:200,overflowY:"auto"}}>
+                <div style={{maxHeight:160,overflowY:"auto",marginBottom:12}}>
                   {filteredPatients.map(p => (
                     <div key={p.id} className="picker-item" onClick={() => assignPatientToModal(p)}
                       style={{padding:"8px 12px",borderRadius:10,cursor:"pointer",marginBottom:4,
@@ -2433,6 +2470,37 @@ function Calendar({ patients, appointments, setAppointments, openModal, sendWhat
                       <div style={{fontSize:"0.75rem",color:"var(--text-soft)"}}>{p.diagnosis}</div>
                     </div>
                   ))}
+                </div>
+                {/* Recurring toggle */}
+                <div style={{borderTop:"1px solid var(--warm)",paddingTop:12}}>
+                  <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
+                    <div onClick={() => setIsRecurring(!isRecurring)}
+                      style={{width:42,height:24,borderRadius:12,cursor:"pointer",transition:"all 0.2s",
+                        background:isRecurring?"#6C63FF":"var(--warm)",position:"relative"}}>
+                      <div style={{position:"absolute",top:3,transition:"all 0.2s",
+                        right:isRecurring?3:undefined,left:isRecurring?undefined:3,
+                        width:18,height:18,borderRadius:"50%",background:"white",
+                        boxShadow:"0 1px 4px rgba(0,0,0,0.2)"}} />
+                    </div>
+                    <span style={{fontSize:"0.82rem",fontWeight:500}}>
+                      {isRecurring ? "🔁 מופע חוזר שבועי" : "1️⃣ טיפול חד פעמי"}
+                    </span>
+                  </div>
+                  {isRecurring && (
+                    <div style={{display:"flex",alignItems:"center",gap:8}}>
+                      <span style={{fontSize:"0.78rem",color:"var(--text-soft)"}}>מספר שבועות:</span>
+                      <div style={{display:"flex",gap:4}}>
+                        {[4,8,12,16,20].map(w => (
+                          <div key={w} onClick={() => setRecurringWeeks(w)}
+                            style={{padding:"4px 10px",borderRadius:8,cursor:"pointer",fontSize:"0.78rem",
+                              background:recurringWeeks===w?"#6C63FF":"var(--warm)",
+                              color:recurringWeeks===w?"white":"var(--text-soft)"}}>
+                            {w}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             )}
@@ -3017,7 +3085,7 @@ function DocumentsBank({ docBank, addDocToBank, removeDocFromBank, showNotificat
 
 
 // ── Patients Archive ──────────────────────────────────────────────
-function PatientsArchive({ patients, receiptsHistory, onRestore, openAiChat }) {
+function PatientsArchive({ patients, receiptsHistory, onRestore, openAiChat, onDelete }) {
   const [selectedPatient, setSelectedPatient] = useState(null);
   const [search, setSearch] = useState("");
 
@@ -3070,12 +3138,18 @@ function PatientsArchive({ patients, receiptsHistory, onRestore, openAiChat }) {
                   {selectedPatient.diagnosis} · גיל {selectedPatient.age}
                 </div>
               </div>
-              <div style={{display:"flex",gap:8}}>
+              <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
                 <button className="btn btn-secondary btn-sm" onClick={() => openAiChat(selectedPatient)}>🤖 עוזר AI</button>
                 <button className="btn btn-primary btn-sm" onClick={() => {
                   onRestore(selectedPatient.id);
                   setSelectedPatient(null);
                 }}>♻️ שחזר מטופל</button>
+                <button className="btn btn-danger btn-sm" onClick={() => {
+                  if (window.confirm("למחוק את " + selectedPatient.name + " לצמיתות? לא ניתן לשחזר!")) {
+                    onDelete(selectedPatient.id);
+                    setSelectedPatient(null);
+                  }
+                }}>🗑️ מחק לצמיתות</button>
               </div>
             </div>
           </div>
