@@ -719,6 +719,10 @@ h1,h2,h3,h4 {
   box-shadow: 0 4px 16px rgba(74,114,64,0.25);
   animation: slideDown 0.3s ease;
 }
+@keyframes slideInRight {
+  from { transform: translateX(100%); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
 @keyframes slideDown {
   from { opacity: 0; transform: translateY(-10px); }
   to { opacity: 1; transform: translateY(0); }
@@ -1119,6 +1123,7 @@ export default function App() {
   const [selectedPatient, setSelectedPatient] = useState(null);
   const [modal, setModal] = useState(null); // "post_session" | "pre_session" | "receipt" | "report" | "questionnaire"
   const [showQuestionnaire, setShowQuestionnaire] = useState(false);
+  const [showPatientsDrawer, setShowPatientsDrawer] = useState(false);
   const [currentPatientForModal, setCurrentPatientForModal] = useState(null);
   const [sessionNote, setSessionNote] = useState("");
   const [isRecording, setIsRecording] = useState(false);
@@ -1541,7 +1546,7 @@ ${styleExamples ? `להלן דוגמאות לסגנון הכתיבה של הקל
     <>
       <style>{CSS}</style>
       <div className="app">
-        <Sidebar page={page} setPage={(p) => { setPage(p); setSelectedPatient(null); }} leadsCount={leads.filter(l => l.status === "waiting").length} />
+        <Sidebar page={page} setPage={(p) => { setPage(p); setSelectedPatient(null); setShowPatientsDrawer(false); }} leadsCount={leads.filter(l => l.status === "waiting").length} />
         <main className="main">
           {notification && <div className="banner">🔔 {notification}</div>}
 
@@ -1800,6 +1805,50 @@ ${styleExamples ? `להלן דוגמאות לסגנון הכתיבה של הקל
           </div>
         </Modal>
       )}
+      {/* Patients Drawer */}
+      {showPatientsDrawer && (
+        <>
+          <div onClick={() => setShowPatientsDrawer(false)}
+            style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.4)",zIndex:300}} />
+          <div style={{
+            position:"fixed", top:0, right:0,
+            width:"min(33vw, 280px)", height:"100vh",
+            background:"linear-gradient(160deg, #1A1D2E 0%, #2D2B55 100%)",
+            zIndex:301, padding:24, display:"flex", flexDirection:"column", gap:8,
+            boxShadow:"-8px 0 40px rgba(0,0,0,0.3)",
+            animation:"slideInRight 0.25s ease"
+          }}>
+            <div style={{color:"rgba(255,255,255,0.5)",fontSize:"0.72rem",fontWeight:600,
+              letterSpacing:"1.5px",textTransform:"uppercase",marginBottom:8}}>
+              ניהול הקליניקה
+            </div>
+            {[
+              {id:"patients_list", icon:"👥", label:"מטופלים"},
+              {id:"receipts", icon:"🧾", label:"חשבוניות"},
+              {id:"patients_archive", icon:"📦", label:"ארכיון"},
+            ].map(t => (
+              <div key={t.id} onClick={() => { setPage(t.id); setSelectedPatient(null); setShowPatientsDrawer(false); }}
+                style={{
+                  display:"flex", alignItems:"center", gap:12,
+                  padding:"14px 16px", borderRadius:14, cursor:"pointer",
+                  background: page===t.id ? "rgba(108,99,255,0.3)" : "rgba(255,255,255,0.05)",
+                  color: page===t.id ? "white" : "rgba(255,255,255,0.7)",
+                  fontWeight: page===t.id ? 700 : 400,
+                  fontSize:"0.95rem",
+                  transition:"all 0.15s",
+                  border: page===t.id ? "1px solid rgba(108,99,255,0.5)" : "1px solid transparent",
+                }}>
+                <span style={{fontSize:"1.2rem"}}>{t.icon}</span>
+                {t.label}
+              </div>
+            ))}
+            <div style={{marginTop:"auto",color:"rgba(255,255,255,0.3)",fontSize:"0.72rem",textAlign:"center"}}>
+              לחץ מחוץ לסגירה
+            </div>
+          </div>
+        </>
+      )}
+
       {showQuestionnaire && currentPatientForModal && (
         <QuestionnaireModal
           patient={currentPatientForModal}
@@ -1842,7 +1891,10 @@ function Sidebar({ page, setPage, leadsCount }) {
       {nav.map(n => (
         <div key={n.id}>
           <div className={`nav-item ${(page === n.id || (n.id==="patients" && isPatientsSection) || (page==="patient_detail" && n.id==="patients")) ? "active":""}`}
-            onClick={() => setPage(n.sub ? n.sub[0].id : n.id)}
+            onClick={() => {
+              if (n.sub) { setShowPatientsDrawer(true); }
+              else { setPage(n.id); setShowPatientsDrawer(false); }
+            }}
             style={{position:"relative"}}>
             <span className="nav-icon">{n.icon}</span>{n.label}
             {n.id === "leads" && leadsCount > 0 && (
