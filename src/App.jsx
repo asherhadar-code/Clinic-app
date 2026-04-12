@@ -1547,9 +1547,36 @@ ${styleExamples ? `להלן דוגמאות לסגנון הכתיבה של הקל
 
           {page === "dashboard" && <Dashboard patients={patients} appointments={appointments} openModal={openModal} sendWhatsApp={sendWhatsApp} />}
           {page === "calendar" && <Calendar patients={patients} appointments={appointments} setAppointments={setAppointments} openModal={openModal} sendWhatsApp={sendWhatsApp} settings={settings} />}
-          {(page === "patients_list" || page === "patients") && !selectedPatient &&
-            <PatientList patients={patients.filter(p => !p.archived)} onSelect={p => { setSelectedPatient(p); setPage("patient_detail"); }}
-              onAdd={() => setPatientModal("add")} />}
+          {(page === "patients_list" || page === "patients" || page === "receipts" || page === "patients_archive") && (
+            <div>
+              {/* Mobile sub-tabs - only shown on mobile */}
+              <div style={{display:"flex",gap:4,marginBottom:16,background:"rgba(108,99,255,0.08)",borderRadius:14,padding:4}}>
+                {[
+                  {id:"patients_list", icon:"👥", label:"מטופלים"},
+                  {id:"receipts", icon:"🧾", label:"חשבוניות"},
+                  {id:"patients_archive", icon:"📦", label:"ארכיון"},
+                ].map(t => (
+                  <div key={t.id} onClick={() => setPage(t.id)}
+                    style={{flex:1,textAlign:"center",padding:"9px 4px",borderRadius:10,cursor:"pointer",
+                      fontSize:"0.78rem",fontWeight:page===t.id?700:400,
+                      background:page===t.id?"white":"transparent",
+                      color:page===t.id?"var(--sage-dark)":"var(--text-soft)",
+                      boxShadow:page===t.id?"0 2px 8px rgba(108,99,255,0.15)":"none",
+                      transition:"all 0.15s"}}>
+                    {t.icon} {t.label}
+                  </div>
+                ))}
+              </div>
+              {(page === "patients_list" || page === "patients") && !selectedPatient &&
+                <PatientList patients={patients.filter(p => !p.archived)} onSelect={p => { setSelectedPatient(p); setPage("patient_detail"); }}
+                  onAdd={() => setPatientModal("add")} />}
+              {/* receipts now inside patients section */}
+              {page === "patients_archive" && <PatientsArchive patients={patients.filter(p => p.archived)} receiptsHistory={receiptsHistory} openAiChat={openAiChat} onRestore={(id) => {
+                sb.archivePatient(id, false);
+                setPatients(prev => prev.map(p => p.id === id ? {...p, archived: false} : p));
+              }} />}
+            </div>
+          )}
           {page === "patient_detail" && selectedPatient &&
             <PatientDetail patient={selectedPatient} onBack={() => { setSelectedPatient(null); setPage("patients_list"); }}
               openModal={openModal} generateReport={generateReport} aiText={aiText} aiLoading={aiLoading} openAiChat={openAiChat}
@@ -1558,10 +1585,7 @@ ${styleExamples ? `להלן דוגמאות לסגנון הכתיבה של הקל
               onDelete={() => deletePatient(selectedPatient.id)} />}
           {page === "receipts" && <Receipts patients={patients.filter(p => !p.archived)} openModal={openModal} receiptsHistory={receiptsHistory} />}
           {page === "settings" && <Settings settings={settings} saveSetting={saveSetting} />}
-          {page === "patients_archive" && <PatientsArchive patients={patients.filter(p => p.archived)} receiptsHistory={receiptsHistory} openAiChat={openAiChat} onRestore={(id) => {
-            sb.archivePatient(id, false);
-            setPatients(prev => prev.map(p => p.id === id ? {...p, archived: false} : p));
-          }} />}
+          {/* archive now inside patients section */}
           {page === "finance" && <Finance receiptsHistory={receiptsHistory} appointments={appointments} />}
           {page === "leads" && <Leads leads={leads} setLeads={setLeads} />}
           {page === "documents_bank" && <DocumentsBank docBank={docBank} addDocToBank={addDocToBank} removeDocFromBank={removeDocFromBank} showNotification={showNotification} />}
