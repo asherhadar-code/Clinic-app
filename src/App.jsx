@@ -1546,7 +1546,7 @@ ${styleExamples ? `להלן דוגמאות לסגנון הכתיבה של הקל
     <>
       <style>{CSS}</style>
       <div className="app">
-        <Sidebar page={page} setPage={(p) => { setPage(p); setSelectedPatient(null); setShowPatientsDrawer(false); }} leadsCount={leads.filter(l => l.status === "waiting").length} />
+        <Sidebar page={page} setPage={(p) => { setPage(p); setSelectedPatient(null); setShowPatientsDrawer(false); }} leadsCount={leads.filter(l => l.status === "waiting").length} openPatientsDrawer={() => setShowPatientsDrawer(true)} />
         <main className="main">
           {notification && <div className="banner">🔔 {notification}</div>}
 
@@ -1811,40 +1811,37 @@ ${styleExamples ? `להלן דוגמאות לסגנון הכתיבה של הקל
           <div onClick={() => setShowPatientsDrawer(false)}
             style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.4)",zIndex:300}} />
           <div style={{
-            position:"fixed", top:0, right:0,
-            width:"min(33vw, 280px)", height:"100vh",
-            background:"linear-gradient(160deg, #1A1D2E 0%, #2D2B55 100%)",
-            zIndex:301, padding:24, display:"flex", flexDirection:"column", gap:8,
+            position:"fixed",top:0,right:0,
+            width:"min(33vw, 260px)",height:"100vh",
+            background:"linear-gradient(160deg,#1A1D2E,#2D2B55)",
+            zIndex:301,padding:"24px 16px",
+            display:"flex",flexDirection:"column",gap:8,
             boxShadow:"-8px 0 40px rgba(0,0,0,0.3)",
             animation:"slideInRight 0.25s ease"
           }}>
-            <div style={{color:"rgba(255,255,255,0.5)",fontSize:"0.72rem",fontWeight:600,
-              letterSpacing:"1.5px",textTransform:"uppercase",marginBottom:8}}>
+            <div style={{color:"rgba(255,255,255,0.45)",fontSize:"0.7rem",fontWeight:600,
+              letterSpacing:"1.5px",textTransform:"uppercase",marginBottom:12}}>
               ניהול הקליניקה
             </div>
             {[
-              {id:"patients_list", icon:"👥", label:"מטופלים"},
-              {id:"receipts", icon:"🧾", label:"חשבוניות"},
-              {id:"patients_archive", icon:"📦", label:"ארכיון"},
+              {id:"patients_list",icon:"👥",label:"מטופלים"},
+              {id:"receipts",icon:"🧾",label:"חשבוניות"},
+              {id:"patients_archive",icon:"📦",label:"ארכיון"},
             ].map(t => (
-              <div key={t.id} onClick={() => { setPage(t.id); setSelectedPatient(null); setShowPatientsDrawer(false); }}
+              <div key={t.id}
+                onClick={() => { setPage(t.id); setSelectedPatient(null); setShowPatientsDrawer(false); }}
                 style={{
-                  display:"flex", alignItems:"center", gap:12,
-                  padding:"14px 16px", borderRadius:14, cursor:"pointer",
-                  background: page===t.id ? "rgba(108,99,255,0.3)" : "rgba(255,255,255,0.05)",
-                  color: page===t.id ? "white" : "rgba(255,255,255,0.7)",
-                  fontWeight: page===t.id ? 700 : 400,
-                  fontSize:"0.95rem",
-                  transition:"all 0.15s",
-                  border: page===t.id ? "1px solid rgba(108,99,255,0.5)" : "1px solid transparent",
+                  display:"flex",alignItems:"center",gap:12,
+                  padding:"13px 14px",borderRadius:14,cursor:"pointer",
+                  background:page===t.id?"rgba(108,99,255,0.3)":"rgba(255,255,255,0.05)",
+                  color:page===t.id?"white":"rgba(255,255,255,0.7)",
+                  fontWeight:page===t.id?700:400,fontSize:"0.9rem",
+                  border:page===t.id?"1px solid rgba(108,99,255,0.4)":"1px solid transparent",
+                  transition:"all 0.15s"
                 }}>
-                <span style={{fontSize:"1.2rem"}}>{t.icon}</span>
-                {t.label}
+                <span style={{fontSize:"1.2rem"}}>{t.icon}</span>{t.label}
               </div>
             ))}
-            <div style={{marginTop:"auto",color:"rgba(255,255,255,0.3)",fontSize:"0.72rem",textAlign:"center"}}>
-              לחץ מחוץ לסגירה
-            </div>
           </div>
         </>
       )}
@@ -1864,7 +1861,7 @@ ${styleExamples ? `להלן דוגמאות לסגנון הכתיבה של הקל
 }
 
 // ── Sidebar ────────────────────────────────────────────────────────
-function Sidebar({ page, setPage, leadsCount }) {
+function Sidebar({ page, setPage, leadsCount, openPatientsDrawer }) {
   const patientsSubPages = ["patients_list","receipts","patients_archive"];
   const isPatientsSection = patientsSubPages.includes(page) || page === "patients" || page === "patient_detail";
 
@@ -1891,10 +1888,7 @@ function Sidebar({ page, setPage, leadsCount }) {
       {nav.map(n => (
         <div key={n.id}>
           <div className={`nav-item ${(page === n.id || (n.id==="patients" && isPatientsSection) || (page==="patient_detail" && n.id==="patients")) ? "active":""}`}
-            onClick={() => {
-              if (n.sub) { setShowPatientsDrawer(true); }
-              else { setPage(n.id); setShowPatientsDrawer(false); }
-            }}
+            onClick={() => n.sub ? openPatientsDrawer() : setPage(n.id)}
             style={{position:"relative"}}>
             <span className="nav-icon">{n.icon}</span>{n.label}
             {n.id === "leads" && leadsCount > 0 && (
