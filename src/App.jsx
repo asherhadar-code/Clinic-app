@@ -1930,6 +1930,8 @@ function Sidebar({ page, setPage, leadsCount, openPatientsDrawer }) {
 
 // ── Dashboard ──────────────────────────────────────────────────────
 function Dashboard({ patients, appointments, openModal, sendWhatsApp }) {
+  // Only show active (non-archived) patients
+  const activePatients = patients.filter(p => p && !p.archived);
   // Get today's day index (0=Sunday...6=Saturday)
   const todayIdx = new Date().getDay();
   const tomorrowIdx = (todayIdx + 1) % 7;
@@ -1937,14 +1939,14 @@ function Dashboard({ patients, appointments, openModal, sendWhatsApp }) {
   // Today's and tomorrow's appointments from real data
   const todayApts = appointments.filter(a => a.day_index === todayIdx).sort((a,b) => a.start_time > b.start_time ? 1 : -1);
   const tomorrowApts = appointments.filter(a => a.day_index === tomorrowIdx).sort((a,b) => a.start_time > b.start_time ? 1 : -1);
-  const unpaid = patients.filter(p => p && !p.paid);
+  const unpaid = activePatients.filter(p => !p.paid);
   const totalWeekApts = appointments.length;
 
   return (
     <>
       <h1 className="page-title">שלום! 👋</h1>
       <div className="stats-grid">
-        <div className="stat-card"><div className="stat-num">{patients.length}</div><div className="stat-label">סה"כ מטופלים</div></div>
+        <div className="stat-card"><div className="stat-num">{activePatients.length}</div><div className="stat-label">סה"כ מטופלים</div></div>
         <div className="stat-card"><div className="stat-num">{todayApts.length}</div><div className="stat-label">טיפולים היום</div></div>
         <div className="stat-card"><div className="stat-num">{totalWeekApts}</div><div className="stat-label">טיפולים השבוע</div></div>
         <div className="stat-card"><div className="stat-num" style={{color: unpaid.length > 0 ? "var(--terracotta)" : "var(--sage-dark)"}}>{unpaid.length}</div><div className="stat-label">ממתינים לתשלום</div></div>
