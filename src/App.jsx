@@ -1006,7 +1006,7 @@ export default function App() {
     workDays: [0,1,2,3,4],
     dayStart: "08:30",
     reminderHour: "17:00",
-    reminderTemplate: "שלום {שם} 😊\nמתזכרת לך לטיפול מחר {תאריך} בשעה {שעה}.\nאשמח לאישור הגעה:\n1️⃣ כן, אגיע\n2️⃣ לא אוכל להגיע",
+    reminderTemplate: "שלום {שם הורה} 😊\nמתזכרת אתכם שיש טיפול מחר {תאריך} בשעה {שעה} ל{שם המטופל}.\nאודה לאישור הגעה:\n1️⃣ כן, נגיע\n2️⃣ לצערנו לא נוכל להגיע",
     giKey: "",
     giSecret: "",
     greenInstanceId: "",
@@ -1324,7 +1324,9 @@ export default function App() {
       "שלום {שם} 😊\nמתזכרת לך לטיפול מחר {תאריך} בשעה {שעה}.\nאשמח לאישור הגעה:\n1️⃣ כן, אגיע\n2️⃣ לא אוכל להגיע";
     
     const message = customMessage || template
-      .replace("{שם}", patient.firstName || patient.name)
+      .replace("{שם הורה}", patient.parentName || patient.firstName || patient.name)
+      .replace("{שם המטופל}", patient.firstName || patient.name)
+      .replace("{שם}", patient.parentName || patient.firstName || patient.name)
       .replace("{תאריך}", dateStr)
       .replace("{שעה}", timeStr);
 
@@ -3573,7 +3575,7 @@ function Settings({ settings, saveSetting }) {
               <textarea className="field" rows={3} defaultValue={settings.reminderTemplate}
                 onBlur={e => handleSave("reminderTemplate", e.target.value)} />
               <div style={{fontSize:"0.72rem",color:"var(--text-soft)",marginTop:4}}>
-                משתנים: {"{שם}"} {"{שעה}"} {"{תאריך}"}
+                משתנים: {"{שם הורה}"} {"{שם המטופל}"} {"{שעה}"} {"{תאריך}"}
               </div>
             </div>
           </>
