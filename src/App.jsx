@@ -1284,11 +1284,9 @@ export default function App() {
     const today = new Date().toLocaleDateString("he-IL");
     try {
       await sb.addSession(currentPatientForModal.id, today, sessionNote);
-      setPatients(prev => prev.map(p => p.id === currentPatientForModal.id ? {
-        ...p,
-        history: [{ date: today, summary: sessionNote }, ...(p.history || [])],
-        sessions: (p.sessions || 0) + 1,
-      } : p));
+      // Reload all patients from Supabase to avoid duplicates
+      const freshPatients = await sb.getPatients();
+      if (Array.isArray(freshPatients)) setPatients(freshPatients);
       showNotification(`✅ סיכום נשמר עבור ${currentPatientForModal.name}`);
     } catch {
       showNotification("❌ שגיאה בשמירת הסיכום");
