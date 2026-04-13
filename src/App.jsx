@@ -1940,15 +1940,24 @@ function Sidebar({ page, setPage, leadsCount, openPatientsDrawer }) {
 function Dashboard({ patients, appointments, openModal, sendWhatsApp }) {
   // Only show active (non-archived) patients
   const activePatients = patients.filter(p => p && !p.archived);
-  // Get today's day index (0=Sunday...6=Saturday)
-  const todayIdx = new Date().getDay();
-  const tomorrowIdx = (todayIdx + 1) % 7;
+  // Today and tomorrow dates
+  const todayStr = (() => { const d=new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; })();
+  const tomorrowStr = (() => { const d=new Date(); d.setDate(d.getDate()+1); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; })();
 
-  // Today's and tomorrow's appointments from real data
-  const todayApts = appointments.filter(a => a.day_index === todayIdx).sort((a,b) => a.start_time > b.start_time ? 1 : -1);
-  const tomorrowApts = appointments.filter(a => a.day_index === tomorrowIdx).sort((a,b) => a.start_time > b.start_time ? 1 : -1);
+  // Week start/end
+  const now = new Date();
+  const weekStart = new Date(now); weekStart.setDate(now.getDate()-now.getDay()); weekStart.setHours(0,0,0,0);
+  const weekEnd = new Date(weekStart); weekEnd.setDate(weekStart.getDate()+6);
+  const fmtD = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+
+  const realApts = appointments.filter(a => a.date && a.block_type !== "break");
+  const todayApts = realApts.filter(a => a.date === todayStr).sort((a,b) => (a.start_time||"") > (b.start_time||"") ? 1 : -1);
+  const tomorrowApts = realApts.filter(a => a.date === tomorrowStr).sort((a,b) => (a.start_time||"") > (b.start_time||"") ? 1 : -1);
+  const weekApts = realApts.filter(a => a.date >= fmtD(weekStart) && a.date <= fmtD(weekEnd));
+  // Count unique patients this week
+  const uniqueWeekPatients = new Set(weekApts.map(a => a.patient_id || a.patient_name)).size;
   const unpaid = activePatients.filter(p => !p.paid);
-  const totalWeekApts = appointments.length;
+  const totalWeekApts = weekApts.length;
 
   return (
     <>
