@@ -1237,7 +1237,7 @@ export default function App() {
       return;
     }
     setCurrentPatientForModal(patient);
-    setAiText(""); setSessionNote("");
+    setAiText(""); setSessionNote(""); setAiChatMessages([]);
     setModal(type);
     if (type === "pre_session") generatePreSession(patient);
     if (type === "receipt") {
@@ -1551,7 +1551,7 @@ ${styleExamples ? `להלן דוגמאות לסגנון הכתיבה של הקל
           {page === "dashboard" && <Dashboard patients={patients} appointments={appointments} openModal={openModal} sendWhatsApp={sendWhatsApp} />}
           {page === "calendar" && <Calendar patients={patients} appointments={appointments} setAppointments={setAppointments} openModal={openModal} sendWhatsApp={sendWhatsApp} settings={settings}
             onSelectPatient={(p) => { setSelectedPatient(p); setPage("patient_detail"); }}
-            onOpenPostSession={(p) => { setCurrentPatientForModal(p); setModal("post_session"); }} />}
+            onOpenPostSession={(p) => { setCurrentPatientForModal(p); setSessionNote(""); setModal("post_session"); }} />}
           {(page === "patients_list" || page === "patients" || page === "receipts" || page === "patients_archive") && (
             <div>
               {/* Mobile sub-tabs - only shown on mobile */}
@@ -1591,7 +1591,11 @@ ${styleExamples ? `להלן דוגמאות לסגנון הכתיבה של הקל
               openModal={openModal} generateReport={generateReport} aiText={aiText} aiLoading={aiLoading} openAiChat={openAiChat}
               documents={documents[selectedPatient.id] || []} addDocument={addDocument} removeDocument={removeDocument}
               onEdit={() => { setEditingPatient(selectedPatient); setPatientModal("edit"); }}
-              onDelete={() => deletePatient(selectedPatient.id)} />}
+              onDelete={() => deletePatient(selectedPatient.id)}
+              onSessionUpdated={async () => {
+                const fresh = await sb.getPatients();
+                if (Array.isArray(fresh)) setPatients(fresh);
+              }} />}
           {page === "receipts" && <Receipts patients={patients.filter(p => !p.archived)} openModal={openModal} receiptsHistory={receiptsHistory} />}
           {page === "settings" && <Settings settings={settings} saveSetting={saveSetting} />}
           {/* archive now inside patients section */}
@@ -2360,10 +2364,25 @@ function Calendar({ patients, appointments, setAppointments, openModal, sendWhat
                           const pt = patients.find(p=>p.id===b.patientId||p.name===b.patientName);
                           if(pt){onSelectPatient(pt);}
                         }}>{b.patientName}</div>
-                      <div style={{fontSize:"0.68rem",marginTop:2,color:
-                        b.status==="arrived"?"#2E7D32":b.status==="cancelled"?"#C4724A":b.status==="confirmed"?"#4CAF50":"#FFA000"}}>
-                        {b.status==="arrived"?"✅ הגיע":b.status==="cancelled"?"❌ בוטל":b.status==="confirmed"?"✅ אישר":"⏳ ממתין"}
-                      </div>
+                      {(() => {
+                        const pt = patients.find(p=>p.id===b.patientId||p.name===b.patientName);
+                        const lastSession = pt?.history?.[0];
+                        const aptDate = b.date ? new Date(b.date) : null;
+                        const sessionDate = lastSession?.date ? (() => {
+                          const parts = lastSession.date.split("/");
+                          return parts.length===3 ? new Date(parts[2],parts[1]-1,parts[0]) : new Date(lastSession.date);
+                        })() : null;
+                        const hasRecorded = aptDate && sessionDate && 
+                          Math.abs(aptDate - sessionDate) < 7*24*60*60*1000 &&
+                          sessionDate >= aptDate;
+                        return (
+                          <div style={{fontSize:"0.68rem",marginTop:2,
+                            color: hasRecorded ? "#2E7D32" : b.status==="cancelled"?"#C4724A":b.status==="confirmed"?"#4CAF50":"#6C63FF",
+                            fontWeight: hasRecorded ? 600 : 400}}>
+                            {hasRecorded ? "🟢 תועד" : b.status==="arrived"?"✅ הגיע":b.status==="cancelled"?"❌ בוטל":b.status==="confirmed"?"✅ אישר":"⏳ ממתין"}
+                          </div>
+                        );
+                      })()}
                       <div style={{display:"flex",gap:4,marginTop:6}}>
                         <button onClick={e=>{e.stopPropagation();updateStatus(b.id,"arrived");}}
                           style={{flex:1,padding:"3px 0",fontSize:"0.6rem",borderRadius:6,border:"none",
@@ -2591,8 +2610,78 @@ function UploadZone({ patientId, addDocument }) {
   );
 }
 
+
+// ── EditableSession ───────────────────────────────────────────────
+function EditableSession({ session, patientId, onUpdated, isLatest }) {
+  const [editing, setEditing] = useState(false);
+  const [text, setText] = useState(session.summary);
+  const [saving, setSaving] = useState(false);
+
+  const handleSave = async () => {
+    if (!text.trim()) return;
+    setSaving(true);
+    try {
+      // Update in Supabase - find session by patient_id and date
+      await fetch(`${SUPABASE_URL}/rest/v1/sessions?patient_id=eq.${patientId}&date=eq.${encodeURIComponent(session.date)}`, {
+        method: "PATCH",
+        headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ summary: text })
+      });
+      setEditing(false);
+      if (onUpdated) await onUpdated();
+    } catch { alert("שגיאה בשמירה"); }
+    setSaving(false);
+  };
+
+  return (
+    <div className="session-item" style={{
+      borderRight: isLatest ? "4px solid #6C63FF" : "3px solid var(--sage-light)",
+      background: isLatest ? "linear-gradient(135deg, #EEF2FF, #F5F0FF)" : undefined,
+      position: "relative"
+    }}>
+      {isLatest && (
+        <div style={{fontSize:"0.72rem",fontWeight:700,color:"#6C63FF",marginBottom:4}}>🟢 טיפול אחרון</div>
+      )}
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
+        <div className="session-date">📅 {session.date}</div>
+        {!editing && (
+          <button onClick={() => { setText(session.summary); setEditing(true); }}
+            style={{background:"none",border:"none",cursor:"pointer",fontSize:"0.75rem",
+              color:"var(--text-soft)",padding:"2px 6px",borderRadius:6,
+              transition:"all 0.15s"}}
+            onMouseEnter={e=>e.currentTarget.style.background="var(--warm)"}
+            onMouseLeave={e=>e.currentTarget.style.background="none"}>
+            ✏️ ערוך
+          </button>
+        )}
+      </div>
+      {editing ? (
+        <>
+          <textarea className="field" rows={4} value={text}
+            onChange={e => setText(e.target.value)}
+            style={{marginBottom:8,fontSize:"0.85rem"}} />
+          <div style={{display:"flex",gap:6}}>
+            <button onClick={handleSave} disabled={saving}
+              style={{padding:"5px 14px",borderRadius:8,border:"none",cursor:"pointer",
+                background:"#6C63FF",color:"white",fontSize:"0.8rem",fontWeight:600}}>
+              {saving ? "שומר..." : "✅ שמור"}
+            </button>
+            <button onClick={() => setEditing(false)}
+              style={{padding:"5px 14px",borderRadius:8,border:"none",cursor:"pointer",
+                background:"var(--warm)",color:"var(--text)",fontSize:"0.8rem"}}>
+              ביטול
+            </button>
+          </div>
+        </>
+      ) : (
+        <div className="session-summary">{session.summary}</div>
+      )}
+    </div>
+  );
+}
+
 // ── Patient Detail ─────────────────────────────────────────────────
-function PatientDetail({ patient, onBack, openModal, generateReport, aiText, aiLoading, openAiChat, documents, addDocument, removeDocument, onEdit, onDelete }) {
+function PatientDetail({ patient, onBack, openModal, generateReport, aiText, aiLoading, openAiChat, documents, addDocument, removeDocument, onEdit, onDelete, onSessionUpdated }) {
   const [tab, setTab] = useState("history");
 
   const docIcon = (type) => type === "report" ? "📄" : type === "summary" ? "📝" : "📎";
@@ -2656,11 +2745,7 @@ function PatientDetail({ patient, onBack, openModal, generateReport, aiText, aiL
         return (
           <div className="session-list">
             {visibleLatest && (
-              <div className="session-item" style={{borderRight:"3px solid var(--sage-dark)",background:"var(--sage-light)"}}>
-                <div style={{fontSize:"0.72rem",fontWeight:600,color:"var(--sage-dark)",marginBottom:4}}>🟢 טיפול אחרון</div>
-                <div className="session-date">📅 {visibleLatest.date}</div>
-                <div className="session-summary">{visibleLatest.summary}</div>
-              </div>
+              <EditableSession session={visibleLatest} patientId={patient.id} onUpdated={onSessionUpdated} isLatest={true} />
             )}
 
             {archiveItems.length > 0 && (
@@ -2673,10 +2758,7 @@ function PatientDetail({ patient, onBack, openModal, generateReport, aiText, aiL
                 </summary>
                 <div style={{marginTop:8,display:"flex",flexDirection:"column",gap:8}}>
                   {archiveItems.map((s, i) => (
-                    <div key={i} className="session-item">
-                      <div className="session-date">📅 {s.date}</div>
-                      <div className="session-summary">{s.summary}</div>
-                    </div>
+                    <EditableSession key={i} session={s} patientId={patient.id} onUpdated={onSessionUpdated} />
                   ))}
                 </div>
               </details>
