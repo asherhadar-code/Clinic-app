@@ -1360,11 +1360,11 @@ export default function App() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          patientName: currentPatientForModal?.name,
+          patientName: currentPatientForModal?.parentName || currentPatientForModal?.name,
           amount: receiptData.amount,
           paymentMethod: receiptData.method,
           email,
-          description: receiptData.note || "טיפול קלינאות תקשורת",
+          description: receiptData.note || `טיפול קלינאות תקשורת - ${currentPatientForModal?.name}`,
         }),
       });
       const data = await res.json();
@@ -1694,7 +1694,7 @@ ${styleExamples ? `להלן דוגמאות לסגנון הכתיבה של הקל
             <div className="receipt-preview mt-3">
               <h4>קבלה | קליניקה לקלינאות תקשורת</h4>
               <hr className="receipt-divider" />
-              <div className="receipt-row"><span>שם מטופל:</span><span>{currentPatientForModal?.name}</span></div>
+              <div className="receipt-row"><span>שם לקוח:</span><span>{currentPatientForModal?.parentName || currentPatientForModal?.name}</span></div>
               <div className="receipt-row"><span>תאריך:</span><span>{new Date().toLocaleDateString("he-IL")}</span></div>
               <div className="receipt-row"><span>אמצעי תשלום:</span><span>{receiptData.method}</span></div>
               {(receiptData.email || currentPatientForModal?.email) && (
