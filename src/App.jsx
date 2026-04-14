@@ -3657,10 +3657,11 @@ function Finance({ receiptsHistory, appointments }) {
     ? Math.round(monthsData.reduce((s, m) => s + m.income, 0) / monthsData.length)
     : 0;
 
-  // Cancellations — only within selected date range
+  // Cancellations — only within selected date range AND up to today
+  const todayStr2 = (() => { const d=new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; })();
   const rangeApts = (appointments || []).filter(a => {
     if (!a.date || a.block_type === "break") return false;
-    return a.date >= startDate && a.date <= endDate;
+    return a.date >= startDate && a.date <= endDate && a.date <= todayStr2;
   });
   const totalApts = rangeApts.length;
   const cancelled = rangeApts.filter(a => a.status === "cancelled").length;
