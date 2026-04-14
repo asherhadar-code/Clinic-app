@@ -3657,9 +3657,13 @@ function Finance({ receiptsHistory, appointments }) {
     ? Math.round(monthsData.reduce((s, m) => s + m.income, 0) / monthsData.length)
     : 0;
 
-  // Cancellations from appointments
-  const totalApts = (appointments || []).filter(a => a.block_type !== "break").length;
-  const cancelled = (appointments || []).filter(a => a.status === "cancelled").length;
+  // Cancellations — only within selected date range
+  const rangeApts = (appointments || []).filter(a => {
+    if (!a.date || a.block_type === "break") return false;
+    return a.date >= startDate && a.date <= endDate;
+  });
+  const totalApts = rangeApts.length;
+  const cancelled = rangeApts.filter(a => a.status === "cancelled").length;
   const cancelRate = totalApts > 0 ? Math.round((cancelled / totalApts) * 100) : 0;
 
   const maxIncome = Math.max(...monthsData.map(m => m.income), 1);
