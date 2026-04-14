@@ -1938,90 +1938,161 @@ function Sidebar({ page, setPage, leadsCount, openPatientsDrawer }) {
 
 // ── Dashboard ──────────────────────────────────────────────────────
 function Dashboard({ patients, appointments, openModal, sendWhatsApp }) {
-  // Only show active (non-archived) patients
   const activePatients = patients.filter(p => p && !p.archived);
-  // Today and tomorrow dates
   const todayStr = (() => { const d=new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; })();
   const tomorrowStr = (() => { const d=new Date(); d.setDate(d.getDate()+1); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; })();
-
-  // Week start/end
   const now = new Date();
   const weekStart = new Date(now); weekStart.setDate(now.getDate()-now.getDay()); weekStart.setHours(0,0,0,0);
   const weekEnd = new Date(weekStart); weekEnd.setDate(weekStart.getDate()+6);
   const fmtD = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
-
   const realApts = appointments.filter(a => a.date && a.block_type !== "break");
   const todayApts = realApts.filter(a => a.date === todayStr).sort((a,b) => (a.start_time||"") > (b.start_time||"") ? 1 : -1);
   const tomorrowApts = realApts.filter(a => a.date === tomorrowStr).sort((a,b) => (a.start_time||"") > (b.start_time||"") ? 1 : -1);
   const weekApts = realApts.filter(a => a.date >= fmtD(weekStart) && a.date <= fmtD(weekEnd));
-  // Count unique patients this week
-  const uniqueWeekPatients = new Set(weekApts.map(a => a.patient_id || a.patient_name)).size;
   const unpaid = activePatients.filter(p => !p.paid);
   const totalWeekApts = weekApts.length;
+
+  const [openPanel, setOpenPanel] = useState(null);
+  const togglePanel = (id) => setOpenPanel(prev => prev === id ? null : id);
+
+  const panels = [
+    {
+      id: "today",
+      icon: "📅",
+      label: "טיפולים היום",
+      count: todayApts.length,
+      color: "#EEF2FF",
+      accent: "#6C63FF",
+      empty: "אין טיפולים היום",
+      content: todayApts.map((a, i) => {
+        const patient = patients.find(p => p.id === a.patient_id || p.name === a.patient_name);
+        return (
+          <div key={i} className="patient-row" style={{marginBottom:8}}>
+            <div className="patient-avatar">{(a.patient_name||"?")[0]}</div>
+            <div className="patient-info">
+              <div className="patient-name">{a.patient_name}</div>
+              <div className="patient-meta">🕐 {a.start_time}</div>
+            </div>
+            <div style={{fontSize:"0.72rem",padding:"3px 8px",borderRadius:20,
+              background: a.status==="confirmed" ? "#E8F5E8" : "#FFF8E1",
+              color: a.status==="confirmed" ? "#2E7D32" : "#F57F17"}}>
+              {a.status==="confirmed" ? "✅ אישר" : "⏳ ממתין"}
+            </div>
+            <button className="btn btn-sm btn-secondary" onClick={() => patient && openModal("pre_session", patient)}>סקירה</button>
+          </div>
+        );
+      })
+    },
+    {
+      id: "tomorrow",
+      icon: "🗓️",
+      label: "טיפולים מחר",
+      count: tomorrowApts.length,
+      color: "#E8FFF4",
+      accent: "#00C97B",
+      empty: "אין טיפולים מחר",
+      content: tomorrowApts.map((a, i) => {
+        const patient = patients.find(p => p.id === a.patient_id || p.name === a.patient_name);
+        return (
+          <div key={i} className="patient-row" style={{marginBottom:8}}>
+            <div className="patient-avatar">{(a.patient_name||"?")[0]}</div>
+            <div className="patient-info">
+              <div className="patient-name">{a.patient_name}</div>
+              <div className="patient-meta">🕐 {a.start_time}</div>
+            </div>
+            <button className="btn btn-sm btn-secondary" onClick={() => patient && openModal("pre_session", patient)}>סקירה</button>
+            <button className="btn btn-sm btn-primary" onClick={() => patient && sendWhatsApp(patient)}>📱 וואטסאפ</button>
+          </div>
+        );
+      })
+    },
+    {
+      id: "unpaid",
+      icon: "🧾",
+      label: "ממתינים לתשלום",
+      count: unpaid.length,
+      color: unpaid.length > 0 ? "#FFF8E1" : "#E8FFF4",
+      accent: unpaid.length > 0 ? "#FFB300" : "#00C97B",
+      empty: "✅ כל המטופלים שילמו",
+      content: unpaid.map(p => (
+        <div key={p.id} className="patient-row" style={{marginBottom:8}}>
+          <div className="patient-avatar">{(p.name||"?")[0]}</div>
+          <div className="patient-info">
+            <div className="patient-name">{p.name}</div>
+            <div className="patient-meta" style={{color:"#C4724A"}}>❌ טרם שולם</div>
+          </div>
+          <button className="btn btn-sm btn-danger" onClick={() => openModal("receipt", p)}>🧾 הפק</button>
+        </div>
+      ))
+    },
+  ];
 
   return (
     <>
       <h1 className="page-title">שלום! 👋</h1>
-      <div className="stats-grid">
+
+      {/* Stats */}
+      <div className="stats-grid" style={{marginBottom:20}}>
         <div className="stat-card"><div className="stat-num">{activePatients.length}</div><div className="stat-label">סה"כ מטופלים</div></div>
         <div className="stat-card"><div className="stat-num">{todayApts.length}</div><div className="stat-label">טיפולים היום</div></div>
         <div className="stat-card"><div className="stat-num">{totalWeekApts}</div><div className="stat-label">טיפולים השבוע</div></div>
         <div className="stat-card"><div className="stat-num" style={{color: unpaid.length > 0 ? "var(--terracotta)" : "var(--sage-dark)"}}>{unpaid.length}</div><div className="stat-label">ממתינים לתשלום</div></div>
       </div>
 
-      <div className="card">
-        <div className="card-title">📅 טיפולים היום ({todayApts.length})</div>
-        {todayApts.length === 0 && <p className="text-soft" style={{padding:"8px 0"}}>אין טיפולים היום</p>}
-        {todayApts.map((a, i) => {
-          const patient = patients.find(p => p.id === a.patient_id || p.name === a.patient_name);
-          return (
-            <div key={i} className="patient-row">
-              <div className="patient-avatar">{(a.patient_name||"?")[0]}</div>
-              <div className="patient-info">
-                <div className="patient-name">{a.patient_name}</div>
-                <div className="patient-meta">🕐 {a.start_time}</div>
-              </div>
-              <div style={{fontSize:"0.72rem",padding:"3px 8px",borderRadius:20,
-                background: a.status==="confirmed" ? "#E8F5E8" : "#FFF8E1",
-                color: a.status==="confirmed" ? "#2E7D32" : "#F57F17"}}>
-                {a.status==="confirmed" ? "✅ אישר" : "⏳ ממתין"}
-              </div>
-              <button className="btn btn-sm btn-secondary" onClick={() => patient && openModal("pre_session", patient)}>סקירה</button>
-            </div>
-          );
-        })}
-      </div>
+      {/* Collapsible panels */}
+      <div style={{display:"flex",flexDirection:"column",gap:10}}>
+        {panels.map(panel => (
+          <div key={panel.id}
+            style={{borderRadius:18,overflow:"hidden",
+              boxShadow: openPanel===panel.id ? "0 8px 30px rgba(0,0,0,0.12)" : "0 2px 8px rgba(0,0,0,0.06)",
+              transition:"box-shadow 0.2s",border:`1px solid ${panel.accent}22`}}>
 
-      <div className="card">
-        <div className="card-title">📅 טיפולים מחר ({tomorrowApts.length})</div>
-        {tomorrowApts.length === 0 && <p className="text-soft" style={{padding:"8px 0"}}>אין טיפולים מחר</p>}
-        {tomorrowApts.map((a, i) => {
-          const patient = patients.find(p => p.id === a.patient_id || p.name === a.patient_name);
-          return (
-            <div key={i} className="patient-row">
-              <div className="patient-avatar">{(a.patient_name||"?")[0]}</div>
-              <div className="patient-info">
-                <div className="patient-name">{a.patient_name}</div>
-                <div className="patient-meta">🕐 {a.start_time}</div>
+            {/* Panel header */}
+            <div onClick={() => togglePanel(panel.id)}
+              style={{display:"flex",alignItems:"center",justifyContent:"space-between",
+                padding:"16px 20px",cursor:"pointer",
+                background: openPanel===panel.id ? panel.color : "white",
+                transition:"background 0.2s"}}>
+              <div style={{display:"flex",alignItems:"center",gap:10}}>
+                <div style={{width:40,height:40,borderRadius:12,
+                  background:`${panel.accent}20`,
+                  display:"flex",alignItems:"center",justifyContent:"center",fontSize:"1.2rem"}}>
+                  {panel.icon}
+                </div>
+                <div>
+                  <div style={{fontWeight:700,fontSize:"0.95rem",color:"var(--text)"}}>{panel.label}</div>
+                  <div style={{fontSize:"0.75rem",color:"var(--text-soft)",marginTop:1}}>
+                    {panel.count === 0 ? "אין רשומות" : `${panel.count} רשומות`}
+                  </div>
+                </div>
               </div>
-              <button className="btn btn-sm btn-secondary" onClick={() => patient && openModal("pre_session", patient)}>סקירה לפני</button>
-              <button className="btn btn-sm btn-primary" onClick={() => patient && sendWhatsApp(patient)}>📱 שלח אישור</button>
+              <div style={{display:"flex",alignItems:"center",gap:8}}>
+                {panel.count > 0 && (
+                  <div style={{background:panel.accent,color:"white",
+                    borderRadius:"50%",minWidth:24,height:24,
+                    display:"flex",alignItems:"center",justifyContent:"center",
+                    fontSize:"0.75rem",fontWeight:700}}>
+                    {panel.count}
+                  </div>
+                )}
+                <div style={{fontSize:"1rem",color:"var(--text-soft)",
+                  transform: openPanel===panel.id ? "rotate(180deg)" : "rotate(0deg)",
+                  transition:"transform 0.2s"}}>
+                  ▾
+                </div>
+              </div>
             </div>
-          );
-        })}
-      </div>
 
-      <div className="card">
-        <div className="card-title">⏰ טרם שולמו ({unpaid.length})</div>
-        {unpaid.length === 0 && <p className="text-soft" style={{padding:"8px 0"}}>✅ כל המטופלים שילמו</p>}
-        {unpaid.map(p => (
-          <div key={p.id} className="patient-row">
-            <div className="patient-avatar">{(p.name||"?")[0]}</div>
-            <div className="patient-info">
-              <div className="patient-name">{p.name}</div>
-              <div className="patient-meta" style={{color:"#C4724A"}}>❌ טרם שולם</div>
-            </div>
-            <button className="btn btn-sm btn-danger" onClick={() => openModal("receipt", p)}>🧾 הפק חשבונית</button>
+            {/* Panel content */}
+            {openPanel === panel.id && (
+              <div style={{padding:"12px 20px 16px",background:"white",
+                borderTop:`2px solid ${panel.accent}33`}}>
+                {panel.count === 0
+                  ? <p className="text-soft" style={{textAlign:"center",padding:"12px 0"}}>{panel.empty}</p>
+                  : panel.content
+                }
+              </div>
+            )}
           </div>
         ))}
       </div>
