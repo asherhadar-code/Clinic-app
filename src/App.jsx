@@ -2361,10 +2361,11 @@ function Calendar({ patients, appointments, setAppointments, openModal, sendWhat
 
           return (
             <div key={dateStr} style={{
-              minWidth:150, flex:1,
-              background: today ? "#F0F7F0" : "var(--white)",
-              borderRadius:16, padding:12,
-              boxShadow: today ? "0 0 0 2px var(--sage)" : "var(--shadow)"
+              minWidth:160, flex:1,
+              background: today ? "#EEF2FF" : "var(--white)",
+              borderRadius:20, padding:14,
+              boxShadow: today ? "0 0 0 2px #6366F1" : "0 1px 3px rgba(0,0,0,0.06)",
+              border: today ? "none" : "0.5px solid rgba(0,0,0,0.06)"
             }}>
               <div style={{textAlign:"center",borderBottom:"2px solid var(--warm)",paddingBottom:6,marginBottom:10}}>
                 <div style={{fontWeight:600,fontSize:"0.85rem",color: today ? "var(--sage-dark)" : "var(--text)"}}>{dayName}</div>
@@ -2440,16 +2441,33 @@ function Calendar({ patients, appointments, setAppointments, openModal, sendWhat
                 <div key={b.id}>
                   {b.type === "treatment" ? (
                     <div style={{
-                      background: b.status==="arrived" ? "#E8F5E8" : b.status==="cancelled" ? "#FBE8E3" : "var(--sage-light)",
-                      border: `2px solid ${b.status==="arrived" ? "#4CAF50" : b.status==="cancelled" ? "#C4724A" : "var(--sage)"}`,
-                      borderRadius:10, padding:"8px 10px", marginBottom:2, position:"relative"
+                      background: b.status==="arrived" ? "#F0FDF4" : b.status==="cancelled" ? "#FFF1F2" : "white",
+                      border: `1.5px solid ${b.status==="arrived" ? "#86EFAC" : b.status==="cancelled" ? "#FDA4AF" : "#E0E7FF"}`,
+                      borderRadius:18, padding:"12px 14px", marginBottom:6, position:"relative",
+                      boxShadow:"0 2px 8px rgba(0,0,0,0.05)"
                     }}>
-                      <div style={{fontSize:"0.68rem",color:"var(--text-soft)"}}>{b.startTime}–{b.endTime}</div>
-                      <div style={{fontWeight:600,fontSize:"0.82rem",color:"var(--sage-dark)",marginTop:1,cursor:"pointer",textDecoration:"underline dotted"}}
+                      {/* Time + delete */}
+                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
+                        <div style={{fontSize:"0.7rem",color:"var(--text-soft)",fontWeight:500,letterSpacing:"0.3px"}}>
+                          {b.startTime} — {b.endTime}
+                        </div>
+                        <span onClick={() => removeBlock(dateStr, b.id)}
+                          style={{cursor:"pointer",fontSize:"0.75rem",color:"var(--text-soft)",
+                            width:20,height:20,borderRadius:"50%",background:"rgba(0,0,0,0.05)",
+                            display:"flex",alignItems:"center",justifyContent:"center",opacity:0.6}}>✕</span>
+                      </div>
+
+                      {/* Patient name */}
+                      <div style={{fontWeight:700,fontSize:"0.9rem",color:"var(--text)",marginBottom:4,
+                        cursor:"pointer",letterSpacing:"-0.3px"}}
                         onClick={e=>{e.stopPropagation();
                           const pt = patients.find(p=>p.id===b.patientId||p.name===b.patientName);
                           if(pt){onSelectPatient(pt);}
-                        }}>{b.patientName}</div>
+                        }}>
+                        {b.patientName}
+                      </div>
+
+                      {/* Status badge */}
                       {(() => {
                         const pt = patients.find(p=>p.id===b.patientId||p.name===b.patientName);
                         const lastSession = pt?.history?.[0];
@@ -2461,24 +2479,39 @@ function Calendar({ patients, appointments, setAppointments, openModal, sendWhat
                         const hasRecorded = aptDate && sessionDate && 
                           Math.abs(aptDate - sessionDate) < 7*24*60*60*1000 &&
                           sessionDate >= aptDate;
+                        const badge = hasRecorded
+                          ? {label:"תועד", bg:"#DCFCE7", color:"#16A34A"}
+                          : b.status==="arrived" ? {label:"הגיע", bg:"#DCFCE7", color:"#16A34A"}
+                          : b.status==="cancelled" ? {label:"בוטל", bg:"#FFE4E6", color:"#E11D48"}
+                          : b.status==="confirmed" ? {label:"אישר", bg:"#EEF2FF", color:"#6366F1"}
+                          : {label:"ממתין", bg:"#F5F5F5", color:"#8E8E93"};
                         return (
-                          <div style={{fontSize:"0.68rem",marginTop:2,
-                            color: hasRecorded ? "#2E7D32" : b.status==="cancelled"?"#C4724A":b.status==="confirmed"?"#4CAF50":"#6C63FF",
-                            fontWeight: hasRecorded ? 600 : 400}}>
-                            {hasRecorded ? "🟢 תועד" : b.status==="arrived"?"✅ הגיע":b.status==="cancelled"?"❌ בוטל":b.status==="confirmed"?"✅ אישר":"⏳ ממתין"}
+                          <div style={{display:"inline-flex",alignItems:"center",gap:4,
+                            background:badge.bg,color:badge.color,
+                            fontSize:"0.68rem",fontWeight:600,padding:"3px 8px",
+                            borderRadius:20,marginBottom:8}}>
+                            {badge.label}
                           </div>
                         );
                       })()}
-                      <div style={{display:"flex",gap:4,marginTop:6}}>
+
+                      {/* Action buttons */}
+                      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,marginTop:4}}>
                         <button onClick={e=>{e.stopPropagation();updateStatus(b.id,"arrived");}}
-                          style={{flex:1,padding:"3px 0",fontSize:"0.6rem",borderRadius:6,border:"none",
-                            background:b.status==="arrived"?"#4CAF50":"#E8F5E8",color:b.status==="arrived"?"white":"#2E7D32",cursor:"pointer"}}>
-                          ✅ הגיע
+                          style={{padding:"7px 0",fontSize:"0.72rem",borderRadius:12,border:"none",
+                            background:b.status==="arrived"?"#16A34A":"#F0FDF4",
+                            color:b.status==="arrived"?"white":"#16A34A",
+                            cursor:"pointer",fontWeight:600,fontFamily:"inherit",
+                            transition:"all 0.15s"}}>
+                          הגיע ✓
                         </button>
                         <button onClick={e=>{e.stopPropagation();updateStatus(b.id,"cancelled");}}
-                          style={{flex:1,padding:"3px 0",fontSize:"0.6rem",borderRadius:6,border:"none",
-                            background:b.status==="cancelled"?"#C4724A":"#FBE8E3",color:b.status==="cancelled"?"white":"#C4724A",cursor:"pointer"}}>
-                          ❌ בוטל
+                          style={{padding:"7px 0",fontSize:"0.72rem",borderRadius:12,border:"none",
+                            background:b.status==="cancelled"?"#E11D48":"#FFF1F2",
+                            color:b.status==="cancelled"?"white":"#E11D48",
+                            cursor:"pointer",fontWeight:600,fontFamily:"inherit",
+                            transition:"all 0.15s"}}>
+                          בוטל ✕
                         </button>
                         <button onClick={e=>{e.stopPropagation();
                           const patient = patients.find(p=>p.id===b.patientId||p.name===b.patientName);
@@ -2488,27 +2521,27 @@ function Calendar({ patients, appointments, setAppointments, openModal, sendWhat
                           u.lang = "he-IL";
                           window.speechSynthesis.speak(u);
                         }}
-                          style={{flex:1,padding:"3px 0",fontSize:"0.6rem",borderRadius:6,border:"none",
-                            background:"var(--warm)",color:"var(--sage-dark)",cursor:"pointer"}}>
+                          style={{padding:"7px 0",fontSize:"0.72rem",borderRadius:12,border:"none",
+                            background:"#F5F5F5",color:"#3C3C3C",
+                            cursor:"pointer",fontWeight:500,fontFamily:"inherit"}}>
                           🔊 סקירה
                         </button>
                         <button onClick={e=>{e.stopPropagation();
                           const pt = patients.find(p=>p.id===b.patientId||p.name===b.patientName);
                           if(pt) onOpenPostSession(pt);
                         }}
-                          style={{flex:1,padding:"3px 0",fontSize:"0.6rem",borderRadius:6,border:"none",
-                            background:"linear-gradient(135deg,#6C63FF,#8B85FF)",color:"white",cursor:"pointer"}}>
+                          style={{padding:"7px 0",fontSize:"0.72rem",borderRadius:12,border:"none",
+                            background:"#6366F1",color:"white",
+                            cursor:"pointer",fontWeight:600,fontFamily:"inherit"}}>
                           📝 תיעוד
                         </button>
                       </div>
-                      <span onClick={() => removeBlock(dateStr, b.id)}
-                        style={{position:"absolute",top:5,left:6,cursor:"pointer",fontSize:"0.7rem",color:"var(--terracotta)",opacity:0.7}}>✕</span>
                     </div>
                   ) : (
-                    <div style={{background:"repeating-linear-gradient(45deg,#f5f0e8,#f5f0e8 4px,#ede5d8 4px,#ede5d8 8px)",
-                      borderRadius:10,padding:"6px 10px",marginBottom:2,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                      <span style={{fontSize:"0.75rem",color:"var(--text-soft)"}}>☕ {b.startTime} ({b.minutes} דק&apos;)</span>
-                      <span onClick={() => removeBlock(dateStr, b.id)} style={{cursor:"pointer",fontSize:"0.7rem",color:"var(--terracotta)"}}>✕</span>
+                    <div style={{background:"#FAFAF7",border:"1.5px dashed #D1D5DB",
+                      borderRadius:14,padding:"10px 14px",marginBottom:6,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                      <span style={{fontSize:"0.75rem",color:"var(--text-soft)",fontWeight:500}}>☕ הפסקה {b.startTime} · {b.minutes} דק׳</span>
+                      <span onClick={() => removeBlock(dateStr, b.id)} style={{cursor:"pointer",fontSize:"0.75rem",color:"var(--text-soft)",opacity:0.5}}>✕</span>
                     </div>
                   )}
                   <AddBtn onClick={() => { setAddModal({dateStr, insertAfterIdx:bi}); setAddType("treatment"); setPatientQ(""); }} />
