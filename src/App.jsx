@@ -1379,7 +1379,7 @@ export default function App() {
           p.id === currentPatientForModal?.id ? { ...p, paid: true } : p
         ));
         sb.markPaid(currentPatientForModal?.id, true).catch(() => {});
-        showNotification(`✅ חשבונית מס' ${data.receiptNumber} נוצרה ונשלחה בהצלחה!`);
+        showNotification(`✅ חשבונית מס' ${data.receiptNumber} נוצרה ונשלחה למייל בהצלחה!`);
         // Save to receipts history
         try {
           await sb.saveReceipt({
