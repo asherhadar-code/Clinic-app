@@ -23,9 +23,14 @@ export default async function handler(req, res) {
     let existingClientId = null;
     if (email) {
       const searchRes = await fetch(
-        `https://api.greeninvoice.co.il/api/v1/clients?search=${encodeURIComponent(email)}`,
+        "https://api.greeninvoice.co.il/api/v1/clients/search",
         {
-          headers: { "Authorization": `Bearer ${authData.token}` },
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${authData.token}`,
+          },
+          body: JSON.stringify({ search: email }),
         }
       );
       const searchData = await searchRes.json();
