@@ -1147,6 +1147,7 @@ export default function App() {
   const [aiChatPatient, setAiChatPatient] = useState(null);
   const [receiptData, setReceiptData] = useState({ amount: "", method: "ביט", note: "" });
   const [notification, setNotification] = useState("");
+  const [receiptSuccess, setReceiptSuccess] = useState(null);
   const [docBank, setDocBank] = useState({
     continuation: [], // בקשה להמשך
     discharge: [],    // דוח סיום טיפול
@@ -1362,29 +1363,35 @@ export default function App() {
     showNotification("⏳ יוצר חשבונית מס קבלה...");
     try {
       const email = receiptData.email || currentPatientForModal?.email || "";
+      const patient = currentPatientForModal;
+      const clientName = `${patient?.parentName || patient?.name}${patient?.name && patient?.parentName ? ` (${patient.name})` : ""}${patient?.idNumber ? ` , ${patient.idNumber}` : ""}`;
       const res = await fetch("/api/receipt", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          patientName: currentPatientForModal?.parentName || currentPatientForModal?.name,
+          patientName: clientName,
           amount: receiptData.amount,
           paymentMethod: receiptData.method,
           email,
-          description: receiptData.note || `טיפול קלינאות תקשורת - ${currentPatientForModal?.name}`,
+          description: receiptData.note || `טיפול קלינאות תקשורת - ${patient?.name}`,
         }),
       });
       const data = await res.json();
       if (data.success) {
         setPatients(prev => prev.map(p =>
-          p.id === currentPatientForModal?.id ? { ...p, paid: true } : p
+          p.id === patient?.id ? { ...p, paid: true } : p
         ));
-        sb.markPaid(currentPatientForModal?.id, true).catch(() => {});
-        showNotification(`✅ חשבונית מס' ${data.receiptNumber} נוצרה ונשלחה למייל בהצלחה!`);
-        // Save to receipts history
+        sb.markPaid(patient?.id, true).catch(() => {});
+        setReceiptSuccess({
+          clientName,
+          receiptNumber: data.receiptNumber,
+          amount: receiptData.amount,
+          method: receiptData.method,
+        });
         try {
           await sb.saveReceipt({
-            patientId: currentPatientForModal?.id,
-            patientName: currentPatientForModal?.name,
+            patientId: patient?.id,
+            patientName: patient?.name,
             amount: parseFloat(receiptData.amount),
             method: receiptData.method,
             note: receiptData.note,
@@ -1553,6 +1560,42 @@ ${styleExamples ? `להלן דוגמאות לסגנון הכתיבה של הקל
         <Sidebar page={page} setPage={(p) => { setPage(p); setSelectedPatient(null); setShowPatientsDrawer(false); }} leadsCount={leads.filter(l => l.status === "waiting").length} openPatientsDrawer={() => setShowPatientsDrawer(true)} />
         <main className="main">
           {notification && <div className="banner">🔔 {notification}</div>}
+
+          {receiptSuccess && (
+            <div className="modal-overlay" onClick={() => setReceiptSuccess(null)}>
+              <div className="modal" style={{width:340,padding:0,overflow:"hidden",borderRadius:20}} onClick={e => e.stopPropagation()}>
+                <div style={{background:"#6366F1",padding:"28px 24px 20px",textAlign:"center"}}>
+                  <div style={{width:56,height:56,borderRadius:"50%",background:"rgba(255,255,255,0.2)",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 12px"}}>
+                    <span style={{fontSize:28}}>✓</span>
+                  </div>
+                  <div style={{fontSize:"1.1rem",fontWeight:600,color:"white",marginBottom:4}}>החשבונית הופקה בהצלחה</div>
+                  <div style={{fontSize:"0.78rem",color:"rgba(255,255,255,0.75)"}}>החשבונית נשלחה למייל של ההורה</div>
+                </div>
+                <div style={{padding:"20px 20px 24px",display:"flex",flexDirection:"column",gap:8}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 12px",background:"#EEF2FF",borderRadius:10}}>
+                    <span style={{fontSize:"0.75rem",color:"#4338CA"}}>לקוח</span>
+                    <span style={{fontSize:"0.75rem",color:"#3730A3",fontWeight:600,textAlign:"left",maxWidth:"60%"}}>{receiptSuccess.clientName}</span>
+                  </div>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 12px",background:"#F0FDF4",borderRadius:10}}>
+                    <span style={{fontSize:"0.75rem",color:"#166534"}}>מספר חשבונית</span>
+                    <span style={{fontSize:"0.75rem",color:"#166534",fontWeight:600}}>{receiptSuccess.receiptNumber}</span>
+                  </div>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 12px",background:"#FFFBEB",borderRadius:10}}>
+                    <span style={{fontSize:"0.75rem",color:"#92400E"}}>סכום</span>
+                    <span style={{fontSize:"0.9rem",color:"#92400E",fontWeight:700}}>₪{receiptSuccess.amount}</span>
+                  </div>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 12px",background:"#FDF4FF",borderRadius:10}}>
+                    <span style={{fontSize:"0.75rem",color:"#7E22CE"}}>אמצעי תשלום</span>
+                    <span style={{fontSize:"0.75rem",color:"#7E22CE",fontWeight:600}}>{receiptSuccess.method}</span>
+                  </div>
+                  <button onClick={() => setReceiptSuccess(null)}
+                    style={{marginTop:8,padding:"10px 0",background:"#6366F1",color:"white",border:"none",borderRadius:12,fontSize:"0.9rem",fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>
+                    סגור
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
 
           {page === "dashboard" && <Dashboard patients={patients} appointments={appointments} openModal={openModal} sendWhatsApp={sendWhatsApp} />}
           {page === "calendar" && <Calendar patients={patients} appointments={appointments} setAppointments={setAppointments} openModal={openModal} sendWhatsApp={sendWhatsApp} settings={settings}
