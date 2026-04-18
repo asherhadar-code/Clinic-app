@@ -1364,7 +1364,7 @@ export default function App() {
     try {
       const email = receiptData.email || currentPatientForModal?.email || "";
       const patient = currentPatientForModal;
-      const clientName = `${patient?.parentName || patient?.name}${patient?.name && patient?.parentName ? ` (${patient.name})` : ""}${patient?.idNumber ? ` , ${patient.idNumber}` : ""}`;
+      const clientName = `${patient?.parentName || patient?.name}${patient?.parentName && patient?.name ? ` (${patient.name})` : ""}${patient?.idNumber ? ` , ${patient.idNumber}` : ""}`;
       const res = await fetch("/api/receipt", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
