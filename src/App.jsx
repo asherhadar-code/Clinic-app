@@ -130,6 +130,22 @@ const sb = {
       body: JSON.stringify({ status })
     });
   },
+  async updateAppointmentPaid(id, paid) {
+    await fetch(`${SUPABASE_URL}/rest/v1/appointments?id=eq.${id}`, {
+      method: "PATCH",
+      headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ paid })
+    });
+  },
+  async getUnpaidArrivedAppointments() {
+    if (!SUPABASE_URL || !SUPABASE_KEY) return [];
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/appointments?status=eq.arrived&paid=eq.false&block_type=eq.treatment&select=*&order=date.asc`, {
+      headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` }
+    });
+    if (!res.ok) return [];
+    const data = await res.json();
+    return Array.isArray(data) ? data : [];
+  },
   async getDocumentBank() {
     if (!SUPABASE_URL || !SUPABASE_KEY) return [];
     const res = await fetch(`${SUPABASE_URL}/rest/v1/document_bank?select=*&order=created_at.desc`, {
@@ -1029,6 +1045,7 @@ export default function App() {
     sb.saveSetting(key, value).catch(() => {});
   };
   const [appointments, setAppointments] = useState([]);
+  const [unpaidAppointments, setUnpaidAppointments] = useState([]);
   const [leads, setLeads] = useState([]);
   const [receiptsHistory, setReceiptsHistory] = useState([]);
   const [patientModal, setPatientModal] = useState(null);
@@ -1036,10 +1053,11 @@ export default function App() {
 
   // Load patients, appointments and document bank from Supabase on startup
   useEffect(() => {
-    Promise.all([sb.getPatients(), sb.getAppointments(), sb.getDocumentBank(), sb.getReceipts(), sb.getSettings(), sb.getLeads()])
-      .then(([pData, aData, dData, rData, sData, lData]) => {
+    Promise.all([sb.getPatients(), sb.getAppointments(), sb.getDocumentBank(), sb.getReceipts(), sb.getSettings(), sb.getLeads(), sb.getUnpaidArrivedAppointments()])
+      .then(([pData, aData, dData, rData, sData, lData, uData]) => {
         setPatients(Array.isArray(pData) ? pData : []);
         setAppointments(Array.isArray(aData) ? aData : []);
+        setUnpaidAppointments(Array.isArray(uData) ? uData : []);
         // Build docBank from flat array
         const bank = { continuation: [], discharge: [], diagnosis: [] };
         (Array.isArray(dData) ? dData : []).forEach(d => {
@@ -1146,6 +1164,7 @@ export default function App() {
   const [aiChatLoading, setAiChatLoading] = useState(false);
   const [aiChatPatient, setAiChatPatient] = useState(null);
   const [receiptData, setReceiptData] = useState({ amount: "", method: "ביט", note: "" });
+  const [selectedAppointmentIds, setSelectedAppointmentIds] = useState([]);
   const [notification, setNotification] = useState("");
   const [receiptSuccess, setReceiptSuccess] = useState(null);
   const [docBank, setDocBank] = useState({
@@ -1364,7 +1383,22 @@ export default function App() {
     try {
       const email = receiptData.email || currentPatientForModal?.email || "";
       const patient = currentPatientForModal;
-      const clientName = `${patient?.parentName || patient?.name}${patient?.parentName && patient?.name ? ` (${patient.name})` : ""}${patient?.idNumber ? ` , ${patient.idNumber}` : ""}`;
+      const parentFull = patient?.parentName
+        ? `${patient.parentName} ${patient?.lastName || ""}`.trim()
+        : patient?.name || "";
+      const childFirst = patient?.firstName || "";
+      const clientName = `${parentFull}${childFirst ? ` (${childFirst})` : ""}${patient?.idNumber ? ` , ${patient.idNumber}` : ""}`;
+
+      // בניית תיאור עם תאריכי טיפול
+      const selectedApts = unpaidAppointments.filter(a => selectedAppointmentIds.includes(a.id));
+      const datesList = selectedApts.map(a => {
+        const d = new Date(a.date);
+        return `${String(d.getDate()).padStart(2,"0")}/${String(d.getMonth()+1).padStart(2,"0")}/${d.getFullYear()}`;
+      }).join(", ");
+      const description = selectedApts.length > 0
+        ? `טיפול קלינאות תקשורת - ${patient?.name} | עבור תאריכי הטיפול: ${datesList}`
+        : receiptData.note || `טיפול קלינאות תקשורת - ${patient?.name}`;
+
       const res = await fetch("/api/receipt", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1373,11 +1407,23 @@ export default function App() {
           amount: receiptData.amount,
           paymentMethod: receiptData.method,
           email,
-          description: receiptData.note || `טיפול קלינאות תקשורת - ${patient?.name}`,
+          description,
         }),
       });
       const data = await res.json();
       if (data.success) {
+        // עדכון paid=true לכל הפגישות שנבחרו
+        for (const aptId of selectedAppointmentIds) {
+          await sb.updateAppointmentPaid(aptId, true).catch(() => {});
+        }
+        // עדכון state של appointments
+        setAppointments(prev => prev.map(a =>
+          selectedAppointmentIds.includes(a.id) ? { ...a, paid: true } : a
+        ));
+        // רענון רשימת פגישות לא משולמות
+        const uData = await sb.getUnpaidArrivedAppointments().catch(() => []);
+        setUnpaidAppointments(Array.isArray(uData) ? uData : []);
+
         setPatients(prev => prev.map(p =>
           p.id === patient?.id ? { ...p, paid: true } : p
         ));
@@ -1394,7 +1440,7 @@ export default function App() {
             patientName: patient?.name,
             amount: parseFloat(receiptData.amount),
             method: receiptData.method,
-            note: receiptData.note,
+            note: description,
             receiptNumber: data.receiptNumber
           });
           const rData = await sb.getReceipts();
@@ -1406,6 +1452,7 @@ export default function App() {
     } catch (err) {
       showNotification(`❌ שגיאה: ${err.message}`);
     }
+    setSelectedAppointmentIds([]);
     closeModal();
   };
 
@@ -1597,7 +1644,7 @@ ${styleExamples ? `להלן דוגמאות לסגנון הכתיבה של הקל
             </div>
           )}
 
-          {page === "dashboard" && <Dashboard patients={patients} appointments={appointments} openModal={openModal} sendWhatsApp={sendWhatsApp} />}
+          {page === "dashboard" && <Dashboard patients={patients} appointments={appointments} unpaidAppointments={unpaidAppointments} openModal={openModal} sendWhatsApp={sendWhatsApp} />}
           {page === "calendar" && <Calendar patients={patients} appointments={appointments} setAppointments={setAppointments} openModal={openModal} sendWhatsApp={sendWhatsApp} settings={settings}
             onSelectPatient={(p) => { setSelectedPatient(p); setPage("patient_detail"); }}
             onOpenPostSession={(p) => { setCurrentPatientForModal(p); setSessionNote(""); setModal("post_session"); }} />}
@@ -1703,6 +1750,65 @@ ${styleExamples ? `להלן דוגמאות לסגנון הכתיבה של הקל
       {modal === "receipt" && (
         <Modal onClose={closeModal}>
           <h3>🧾 חשבונית מס קבלה — {currentPatientForModal?.name}</h3>
+
+          {/* בחירת תאריכי טיפול */}
+          {(() => {
+            const patientUnpaid = unpaidAppointments.filter(a =>
+              a.patient_id === currentPatientForModal?.id || a.patient_name === currentPatientForModal?.name
+            );
+            if (patientUnpaid.length === 0) return null;
+            const pricePerSession = parseFloat(settings?.defaultPrice || 380);
+            return (
+              <div style={{background:"#EEF2FF",borderRadius:12,padding:"12px 14px",marginBottom:12}}>
+                <div style={{fontWeight:600,fontSize:"0.85rem",color:"#4338CA",marginBottom:8}}>
+                  📅 בחר טיפולים לחשבונית ({patientUnpaid.length} טיפולים לא משולמים)
+                </div>
+                {patientUnpaid.map(a => {
+                  const d = new Date(a.date);
+                  const dateStr = `${String(d.getDate()).padStart(2,"0")}/${String(d.getMonth()+1).padStart(2,"0")}/${d.getFullYear()}`;
+                  const checked = selectedAppointmentIds.includes(a.id);
+                  return (
+                    <div key={a.id} onClick={() => {
+                      setSelectedAppointmentIds(prev =>
+                        checked ? prev.filter(id => id !== a.id) : [...prev, a.id]
+                      );
+                      const count = checked ? selectedAppointmentIds.length - 1 : selectedAppointmentIds.length + 1;
+                      setReceiptData(prev => ({ ...prev, amount: String(count * pricePerSession) }));
+                    }} style={{
+                      display:"flex",alignItems:"center",gap:10,
+                      padding:"7px 10px",borderRadius:8,cursor:"pointer",marginBottom:4,
+                      background: checked ? "#6366F1" : "white",
+                      border:`1.5px solid ${checked ? "#6366F1" : "#C7D2FE"}`,
+                      transition:"all 0.15s"
+                    }}>
+                      <div style={{
+                        width:18,height:18,borderRadius:4,flexShrink:0,
+                        background: checked ? "white" : "transparent",
+                        border:`2px solid ${checked ? "#6366F1" : "#A5B4FC"}`,
+                        display:"flex",alignItems:"center",justifyContent:"center"
+                      }}>
+                        {checked && <span style={{fontSize:12,color:"#6366F1",fontWeight:700}}>✓</span>}
+                      </div>
+                      <span style={{fontSize:"0.82rem",fontWeight:500,color: checked ? "white" : "#1C1C1E",flex:1}}>{dateStr}</span>
+                      <span style={{fontSize:"0.78rem",color: checked ? "rgba(255,255,255,0.8)" : "#8E8E93"}}>{a.start_time}</span>
+                      <span style={{fontSize:"0.78rem",fontWeight:600,color: checked ? "white" : "#6366F1"}}>₪{pricePerSession}</span>
+                    </div>
+                  );
+                })}
+                {selectedAppointmentIds.length > 0 && (
+                  <div style={{marginTop:8,padding:"6px 10px",background:"white",borderRadius:8,
+                    display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                    <span style={{fontSize:"0.78rem",color:"#4338CA",fontWeight:500}}>
+                      {selectedAppointmentIds.length} טיפולים נבחרו
+                    </span>
+                    <span style={{fontSize:"0.9rem",fontWeight:700,color:"#4338CA"}}>
+                      סה״כ: ₪{selectedAppointmentIds.length * pricePerSession}
+                    </span>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
 
           {/* פרטי קשר */}
           <div style={{background:"var(--cream)",borderRadius:12,padding:"12px 14px",marginBottom:8,fontSize:"0.85rem"}}>
@@ -1986,7 +2092,7 @@ function Sidebar({ page, setPage, leadsCount, openPatientsDrawer }) {
 
 
 // ── Dashboard ──────────────────────────────────────────────────────
-function Dashboard({ patients, appointments, openModal, sendWhatsApp }) {
+function Dashboard({ patients, appointments, unpaidAppointments, openModal, sendWhatsApp }) {
   const activePatients = patients.filter(p => p && !p.archived);
   const todayStr = (() => { const d=new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; })();
   const tomorrowStr = (() => { const d=new Date(); d.setDate(d.getDate()+1); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; })();
@@ -1998,8 +2104,16 @@ function Dashboard({ patients, appointments, openModal, sendWhatsApp }) {
   const todayApts = realApts.filter(a => a.date === todayStr).sort((a,b) => (a.start_time||"") > (b.start_time||"") ? 1 : -1);
   const tomorrowApts = realApts.filter(a => a.date === tomorrowStr).sort((a,b) => (a.start_time||"") > (b.start_time||"") ? 1 : -1);
   const weekApts = realApts.filter(a => a.date >= fmtD(weekStart) && a.date <= fmtD(weekEnd));
-  const unpaid = activePatients.filter(p => !p.paid);
   const totalWeekApts = weekApts.length;
+
+  // קיבוץ פגישות לא משולמות לפי מטופל
+  const unpaidByPatient = (unpaidAppointments || []).reduce((acc, a) => {
+    const key = a.patient_id || a.patient_name;
+    if (!acc[key]) acc[key] = { patientId: a.patient_id, patientName: a.patient_name, apts: [] };
+    acc[key].apts.push(a);
+    return acc;
+  }, {});
+  const unpaidPatients = Object.values(unpaidByPatient);
 
   const [openPanel, setOpenPanel] = useState(null);
   const togglePanel = (id) => setOpenPanel(prev => prev === id ? null : id);
@@ -2059,20 +2173,30 @@ function Dashboard({ patients, appointments, openModal, sendWhatsApp }) {
       id: "unpaid",
       icon: "🧾",
       label: "ממתינים לתשלום",
-      count: unpaid.length,
-      color: unpaid.length > 0 ? "#FFF8E1" : "#E8FFF4",
-      accent: unpaid.length > 0 ? "#FFB300" : "#00C97B",
+      count: unpaidPatients.length,
+      color: unpaidPatients.length > 0 ? "#FFF8E1" : "#E8FFF4",
+      accent: unpaidPatients.length > 0 ? "#FFB300" : "#00C97B",
       empty: "✅ כל המטופלים שילמו",
-      content: unpaid.map(p => (
-        <div key={p.id} className="patient-row" style={{marginBottom:8}}>
-          <div className="patient-avatar">{(p.name||"?")[0]}</div>
-          <div className="patient-info">
-            <div className="patient-name">{p.name}</div>
-            <div className="patient-meta" style={{color:"#C4724A"}}>❌ טרם שולם</div>
+      content: unpaidPatients.map(up => {
+        const patient = patients.find(p => p.id === up.patientId || p.name === up.patientName);
+        return (
+          <div key={up.patientId || up.patientName} className="patient-row" style={{marginBottom:8}}>
+            <div className="patient-avatar">{(up.patientName||"?")[0]}</div>
+            <div className="patient-info">
+              <div className="patient-name">{up.patientName}</div>
+              <div className="patient-meta" style={{color:"#C4724A",display:"flex",alignItems:"center",gap:6}}>
+                ❌ טרם שולם
+                <span style={{background:"#FFB300",color:"white",borderRadius:"50%",
+                  minWidth:18,height:18,display:"inline-flex",alignItems:"center",
+                  justifyContent:"center",fontSize:"0.65rem",fontWeight:700,padding:"0 3px"}}>
+                  {up.apts.length}
+                </span>
+              </div>
+            </div>
+            <button className="btn btn-sm btn-danger" onClick={() => patient && openModal("receipt", patient)}>🧾 הפק</button>
           </div>
-          <button className="btn btn-sm btn-danger" onClick={() => openModal("receipt", p)}>🧾 הפק</button>
-        </div>
-      ))
+        );
+      })
     },
   ];
 
@@ -2248,7 +2372,8 @@ function Calendar({ patients, appointments, setAppointments, openModal, sendWhat
         patientName: a.patient_name,
         status: a.status || "pending",
         startTime: a.start_time || "08:30",
-        date: a.date
+        date: a.date,
+        paid: a.paid === true
       }));
   };
 
@@ -2493,7 +2618,7 @@ function Calendar({ patients, appointments, setAppointments, openModal, sendWhat
                         onClick={e=>{e.stopPropagation();
                           const pt = patients.find(p=>p.id===b.patientId||p.name===b.patientName);
                           if(pt){onSelectPatient(pt);}
-                        }}>{b.patientName}</div>
+                        }}>{b.patientName} {b.paid ? "👑" : ""}</div>
                       <div style={{fontSize:"0.68rem",marginTop:2,color:
                         b.status==="arrived"?"#2E7D32":b.status==="cancelled"?"#C4724A":b.status==="confirmed"?"#4CAF50":"#FFA000"}}>
                         {b.status==="arrived"?"✅ הגיע":b.status==="cancelled"?"❌ בוטל":b.status==="confirmed"?"✅ אישר":"⏳ ממתין"}
