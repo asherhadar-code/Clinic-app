@@ -2209,7 +2209,7 @@ function Dashboard({ patients, appointments, unpaidAppointments, openModal, send
         <div className="stat-card"><div className="stat-num">{activePatients.length}</div><div className="stat-label">סה"כ מטופלים</div></div>
         <div className="stat-card"><div className="stat-num">{todayApts.length}</div><div className="stat-label">טיפולים היום</div></div>
         <div className="stat-card"><div className="stat-num">{totalWeekApts}</div><div className="stat-label">טיפולים השבוע</div></div>
-        <div className="stat-card"><div className="stat-num" style={{color: unpaid.length > 0 ? "var(--terracotta)" : "var(--sage-dark)"}}>{unpaid.length}</div><div className="stat-label">ממתינים לתשלום</div></div>
+        <div className="stat-card"><div className="stat-num" style={{color: unpaidPatients.length > 0 ? "var(--terracotta)" : "var(--sage-dark)"}}>{unpaidPatients.length}</div><div className="stat-label">ממתינים לתשלום</div></div>
       </div>
 
       {/* Collapsible panels */}
