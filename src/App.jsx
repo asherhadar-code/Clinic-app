@@ -1646,7 +1646,7 @@ ${styleExamples ? `להלן דוגמאות לסגנון הכתיבה של הקל
                     );
                   })}
                 </div>
-                <div style={{display:"flex",gap:8"}}>
+                <div style={{display:"flex",gap:8}}>
                   <button className="btn btn-primary" disabled={markPaidModal.selectedIds.length === 0}
                     onClick={async () => {
                       for (const aptId of markPaidModal.selectedIds) {
