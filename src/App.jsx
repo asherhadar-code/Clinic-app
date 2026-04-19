@@ -1703,7 +1703,7 @@ ${styleExamples ? `להלן דוגמאות לסגנון הכתיבה של הקל
             </div>
           )}
 
-          {page === "dashboard" && <Dashboard patients={patients} appointments={appointments} unpaidAppointments={unpaidAppointments} openModal={openModal} sendWhatsApp={sendWhatsApp} />}
+          {page === "dashboard" && <Dashboard patients={patients} appointments={appointments} unpaidAppointments={unpaidAppointments} openModal={openModal} sendWhatsApp={sendWhatsApp} setMarkPaidModal={setMarkPaidModal} />}
           {page === "calendar" && <Calendar patients={patients} appointments={appointments} setAppointments={setAppointments} openModal={openModal} sendWhatsApp={sendWhatsApp} settings={settings}
             onSelectPatient={(p) => { setSelectedPatient(p); setPage("patient_detail"); }}
             onOpenPostSession={(p) => { setCurrentPatientForModal(p); setSessionNote(""); setModal("post_session"); }} />}
@@ -2151,7 +2151,7 @@ function Sidebar({ page, setPage, leadsCount, openPatientsDrawer }) {
 
 
 // ── Dashboard ──────────────────────────────────────────────────────
-function Dashboard({ patients, appointments, unpaidAppointments, openModal, sendWhatsApp }) {
+function Dashboard({ patients, appointments, unpaidAppointments, openModal, sendWhatsApp, setMarkPaidModal }) {
   const activePatients = patients.filter(p => p && !p.archived);
   const todayStr = (() => { const d=new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; })();
   const tomorrowStr = (() => { const d=new Date(); d.setDate(d.getDate()+1); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; })();
