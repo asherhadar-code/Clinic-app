@@ -1165,6 +1165,7 @@ export default function App() {
   const [aiChatPatient, setAiChatPatient] = useState(null);
   const [receiptData, setReceiptData] = useState({ amount: "", method: "ביט", note: "" });
   const [selectedAppointmentIds, setSelectedAppointmentIds] = useState([]);
+  const [markPaidModal, setMarkPaidModal] = useState(null); // { patientName, apts }
   const [notification, setNotification] = useState("");
   const [receiptSuccess, setReceiptSuccess] = useState(null);
   const [docBank, setDocBank] = useState({
@@ -1607,6 +1608,64 @@ ${styleExamples ? `להלן דוגמאות לסגנון הכתיבה של הקל
         <Sidebar page={page} setPage={(p) => { setPage(p); setSelectedPatient(null); setShowPatientsDrawer(false); }} leadsCount={leads.filter(l => l.status === "waiting").length} openPatientsDrawer={() => setShowPatientsDrawer(true)} />
         <main className="main">
           {notification && <div className="banner">🔔 {notification}</div>}
+
+          {markPaidModal && (
+            <div className="modal-overlay" onClick={() => setMarkPaidModal(null)}>
+              <div className="modal" style={{width:340}} onClick={e => e.stopPropagation()}>
+                <h3 style={{marginBottom:14}}>👑 סמן כשולם — {markPaidModal.patientName}</h3>
+                <p style={{fontSize:"0.8rem",color:"var(--text-soft)",marginBottom:12}}>בחר את הטיפולים ששולמו:</p>
+                <div style={{display:"flex",flexDirection:"column",gap:6,marginBottom:16}}>
+                  {markPaidModal.apts.map(a => {
+                    const d = new Date(a.date);
+                    const dateStr = `${String(d.getDate()).padStart(2,"0")}/${String(d.getMonth()+1).padStart(2,"0")}/${d.getFullYear()}`;
+                    const checked = markPaidModal.selectedIds.includes(a.id);
+                    return (
+                      <div key={a.id} onClick={() => setMarkPaidModal(prev => ({
+                        ...prev,
+                        selectedIds: checked
+                          ? prev.selectedIds.filter(id => id !== a.id)
+                          : [...prev.selectedIds, a.id]
+                      }))} style={{
+                        display:"flex",alignItems:"center",gap:10,
+                        padding:"8px 12px",borderRadius:10,cursor:"pointer",
+                        background: checked ? "#6366F1" : "white",
+                        border:`1.5px solid ${checked ? "#6366F1" : "#C7D2FE"}`,
+                        transition:"all 0.15s"
+                      }}>
+                        <div style={{
+                          width:18,height:18,borderRadius:4,flexShrink:0,
+                          background: checked ? "white" : "transparent",
+                          border:`2px solid ${checked ? "#6366F1" : "#A5B4FC"}`,
+                          display:"flex",alignItems:"center",justifyContent:"center"
+                        }}>
+                          {checked && <span style={{fontSize:12,color:"#6366F1",fontWeight:700}}>✓</span>}
+                        </div>
+                        <span style={{fontSize:"0.85rem",fontWeight:500,color: checked ? "white" : "#1C1C1E",flex:1}}>{dateStr}</span>
+                        <span style={{fontSize:"0.78rem",color: checked ? "rgba(255,255,255,0.8)" : "#8E8E93"}}>{a.start_time}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+                <div style={{display:"flex",gap:8"}}>
+                  <button className="btn btn-primary" disabled={markPaidModal.selectedIds.length === 0}
+                    onClick={async () => {
+                      for (const aptId of markPaidModal.selectedIds) {
+                        await sb.updateAppointmentPaid(aptId, true).catch(() => {});
+                      }
+                      setAppointments(prev => prev.map(a =>
+                        markPaidModal.selectedIds.includes(a.id) ? { ...a, paid: true } : a
+                      ));
+                      const uData = await sb.getUnpaidArrivedAppointments().catch(() => []);
+                      setUnpaidAppointments(Array.isArray(uData) ? uData : []);
+                      setMarkPaidModal(null);
+                    }}>
+                    👑 סמן כשולם ({markPaidModal.selectedIds.length})
+                  </button>
+                  <button className="btn btn-secondary" onClick={() => setMarkPaidModal(null)}>ביטול</button>
+                </div>
+              </div>
+            </div>
+          )}
 
           {receiptSuccess && (
             <div className="modal-overlay" onClick={() => setReceiptSuccess(null)}>
@@ -2193,6 +2252,10 @@ function Dashboard({ patients, appointments, unpaidAppointments, openModal, send
                 </span>
               </div>
             </div>
+            <button className="btn btn-sm" style={{background:"#E8F5E8",color:"#2E7D32",border:"none",marginLeft:4}}
+              onClick={() => setMarkPaidModal({ patientName: up.patientName, apts: up.apts, selectedIds: [] })}>
+              👑 שולם
+            </button>
             <button className="btn btn-sm btn-danger" onClick={() => patient && openModal("receipt", patient)}>🧾 הפק</button>
           </div>
         );
