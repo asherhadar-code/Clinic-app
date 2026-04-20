@@ -74,7 +74,7 @@ export default async function handler(req, res) {
         type: 320,
         lang: "he",
         currency: "ILS",
-        vatType: 1,
+        vatType: 2,
         discount: 0,
         rounding: false,
         signed: true,
@@ -86,7 +86,7 @@ export default async function handler(req, res) {
             quantity: 1,
             price: fullAmount,
             currency: "ILS",
-            vatType: 1,
+            vatType: 2,
           },
         ],
         payment: [
