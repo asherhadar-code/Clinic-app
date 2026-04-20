@@ -139,12 +139,12 @@ const sb = {
   },
   async getUnpaidArrivedAppointments() {
     if (!SUPABASE_URL || !SUPABASE_KEY) return [];
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/appointments?status=eq.arrived&paid=eq.false&block_type=eq.treatment&select=*&order=date.asc`, {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/appointments?status=eq.arrived&block_type=eq.treatment&select=*&order=date.asc`, {
       headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` }
     });
     if (!res.ok) return [];
     const data = await res.json();
-    return Array.isArray(data) ? data : [];
+    return Array.isArray(data) ? data.filter(a => a.paid !== true) : [];
   },
   async getDocumentBank() {
     if (!SUPABASE_URL || !SUPABASE_KEY) return [];
@@ -1813,8 +1813,10 @@ ${styleExamples ? `להלן דוגמאות לסגנון הכתיבה של הקל
 
           {/* בחירת תאריכי טיפול */}
           {(() => {
+            const todayStr = new Date().toISOString().split("T")[0];
             const patientUnpaid = unpaidAppointments.filter(a =>
-              a.patient_id === currentPatientForModal?.id || a.patient_name === currentPatientForModal?.name
+              (a.patient_id === currentPatientForModal?.id || a.patient_name === currentPatientForModal?.name)
+              && a.date <= todayStr
             );
             if (patientUnpaid.length === 0) return null;
             const pricePerSession = parseFloat(settings?.defaultPrice || 380);
