@@ -61,7 +61,6 @@ export default async function handler(req, res) {
     };
 
     const fullAmount = parseFloat(amount);
-    const priceBeforeVat = Math.round((fullAmount / 1.17) * 100) / 100;
 
     // Step 5: Create receipt
     const receiptRes = await fetch("https://api.greeninvoice.co.il/api/v1/documents", {
@@ -75,7 +74,7 @@ export default async function handler(req, res) {
         type: 320,
         lang: "he",
         currency: "ILS",
-        vatType: 0,
+        vatType: 1,
         discount: 0,
         rounding: false,
         signed: true,
@@ -85,8 +84,9 @@ export default async function handler(req, res) {
           {
             description: description || "טיפול קלינאות תקשורת",
             quantity: 1,
-            price: priceBeforeVat,
+            price: fullAmount,
             currency: "ILS",
+            vatType: 1,
           },
         ],
         payment: [
