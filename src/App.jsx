@@ -1815,7 +1815,7 @@ ${styleExamples ? `להלן דוגמאות לסגנון הכתיבה של הקל
           {(() => {
             const todayStr = new Date().toISOString().split("T")[0];
             const patientUnpaid = unpaidAppointments.filter(a =>
-              (a.patient_id === currentPatientForModal?.id || a.patient_name === currentPatientForModal?.name)
+              (String(a.patient_id) === String(currentPatientForModal?.id) || a.patient_name === currentPatientForModal?.name)
               && a.date <= todayStr
             );
             if (patientUnpaid.length === 0) return null;
@@ -2168,13 +2168,16 @@ function Dashboard({ patients, appointments, unpaidAppointments, openModal, send
   const weekApts = realApts.filter(a => a.date >= fmtD(weekStart) && a.date <= fmtD(weekEnd));
   const totalWeekApts = weekApts.length;
 
-  // קיבוץ פגישות לא משולמות לפי מטופל
-  const unpaidByPatient = (unpaidAppointments || []).reduce((acc, a) => {
-    const key = a.patient_id || a.patient_name;
-    if (!acc[key]) acc[key] = { patientId: a.patient_id, patientName: a.patient_name, apts: [] };
-    acc[key].apts.push(a);
-    return acc;
-  }, {});
+  // קיבוץ פגישות לא משולמות לפי מטופל (רק עד היום)
+  const todayStr2 = new Date().toISOString().split("T")[0];
+  const unpaidByPatient = (unpaidAppointments || [])
+    .filter(a => a.date <= todayStr2)
+    .reduce((acc, a) => {
+      const key = String(a.patient_id) || a.patient_name;
+      if (!acc[key]) acc[key] = { patientId: a.patient_id, patientName: a.patient_name, apts: [] };
+      acc[key].apts.push(a);
+      return acc;
+    }, {});
   const unpaidPatients = Object.values(unpaidByPatient);
 
   const [openPanel, setOpenPanel] = useState(null);
@@ -2467,9 +2470,16 @@ function Calendar({ patients, appointments, setAppointments, openModal, sendWhat
     try {
       const timeline = buildTimeline(addModal.dateStr);
       const insertAfter = timeline[addModal.insertAfterIdx];
-      const startTime = insertAfter ? insertAfter.endTime : dayStart;
+      // אם זו שעת חלון — השתמש בשעת ה-slot, אחרת חשב רגיל
+      const startTime = addModal.slotStartTime || (insertAfter ? insertAfter.endTime : dayStart);
       const dayIdx = new Date(addModal.dateStr).getDay();
-      
+
+      // אם יש slotId — מחק את ה-slot
+      if (addModal.slotId) {
+        await sb.deleteAppointment(addModal.slotId).catch(() => {});
+        setAppointments(prev => prev.filter(a => a.id !== addModal.slotId));
+      }
+
       // Build list of dates to add
       const dates = [addModal.dateStr];
       if (isRecurring) {
@@ -2513,27 +2523,27 @@ function Calendar({ patients, appointments, setAppointments, openModal, sendWhat
   };
 
   const addBlock = async (dateStr, insertAfterIdx) => {
-    if (addType === "break") {
+    if (addType === "break" || addType === "slot") {
       const timeline = buildTimeline(dateStr);
       const insertAfter = timeline[insertAfterIdx];
-      const breakStart = insertAfter ? insertAfter.endTime : dayStart;
+      const blockStart = insertAfter ? insertAfter.endTime : dayStart;
       try {
         const newApt = await sb.addAppointment({
           dayIndex: new Date(dateStr).getDay(),
-          startTime: breakStart,
-          blockType: "break",
-          minutes: breakMins,
-          status: "break",
+          startTime: blockStart,
+          blockType: addType,
+          minutes: addType === "break" ? breakMins : 45,
+          status: addType,
           date: dateStr,
         });
         if (newApt && newApt.id) {
           setAppointments(prev => [...prev, {
             ...newApt,
             day_index: new Date(dateStr).getDay(),
-            block_type: "break",
-            minutes: breakMins,
-            start_time: breakStart,
-            status: "break",
+            block_type: addType,
+            minutes: addType === "break" ? breakMins : 45,
+            start_time: blockStart,
+            status: addType,
             date: dateStr
           }]);
         }
@@ -2724,6 +2734,28 @@ function Calendar({ patients, appointments, setAppointments, openModal, sendWhat
                       <span onClick={() => removeBlock(dateStr, b.id)}
                         style={{position:"absolute",top:5,left:6,cursor:"pointer",fontSize:"0.7rem",color:"var(--terracotta)",opacity:0.7}}>✕</span>
                     </div>
+                  ) : b.type === "slot" ? (
+                    <div style={{
+                      background:"repeating-linear-gradient(45deg,white,white 6px,#E0F2FE 6px,#E0F2FE 12px)",
+                      border:"1.5px solid #7DD3FC",
+                      borderRadius:10,padding:"8px 10px",marginBottom:2,position:"relative"
+                    }}>
+                      <div style={{fontSize:"0.68rem",color:"#0369A1",marginBottom:4,fontWeight:500}}>
+                        🕐 שעת חלון · {b.startTime}–{b.endTime}
+                      </div>
+                      <div style={{display:"flex",gap:6,alignItems:"center",justifyContent:"space-between"}}>
+                        <button onClick={e=>{e.stopPropagation();
+                          setAddModal({dateStr, insertAfterIdx:-1, slotId: b.id, slotStartTime: b.startTime});
+                          setAddType("treatment");
+                          setPatientQ("");
+                        }} style={{
+                          flex:1,padding:"4px 8px",fontSize:"0.65rem",borderRadius:6,border:"none",
+                          background:"#0284C7",color:"white",cursor:"pointer",fontWeight:600
+                        }}>+ הוסף מטופל</button>
+                        <span onClick={() => removeBlock(dateStr, b.id)}
+                          style={{cursor:"pointer",fontSize:"0.7rem",color:"#C4724A",opacity:0.7}}>✕</span>
+                      </div>
+                    </div>
                   ) : (
                     <div style={{background:"repeating-linear-gradient(45deg,#f5f0e8,#f5f0e8 4px,#ede5d8 4px,#ede5d8 8px)",
                       borderRadius:10,padding:"6px 10px",marginBottom:2,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
@@ -2752,7 +2784,7 @@ function Calendar({ patients, appointments, setAppointments, openModal, sendWhat
             </h3>
 
             <div style={{display:"flex",gap:4,background:"var(--warm)",borderRadius:10,padding:3,marginBottom:14}}>
-              {[["treatment","👤 טיפול"],["break","☕ הפסקה"]].map(([val,label]) => (
+              {[["treatment","👤 טיפול"],["break","☕ הפסקה"],["slot","🕐 שעת חלון"]].map(([val,label]) => (
                 <div key={val} onClick={() => setAddType(val)}
                   style={{flex:1,textAlign:"center",padding:"7px",borderRadius:8,cursor:"pointer",fontSize:"0.85rem",
                     background:addType===val?"var(--white)":"transparent",
@@ -2762,7 +2794,12 @@ function Calendar({ patients, appointments, setAppointments, openModal, sendWhat
               ))}
             </div>
 
-            {addType === "break" ? (
+            {addType === "slot" ? (
+              <div>
+                <p style={{fontSize:"0.82rem",color:"var(--text-soft)",marginBottom:12}}>תתווסף שעת חלון של 45 דקות</p>
+                <button className="btn btn-primary" onClick={() => addBlock(addModal.dateStr, addModal.insertAfterIdx)}>הוסף שעת חלון</button>
+              </div>
+            ) : addType === "break" ? (
               <div>
                 <p style={{fontSize:"0.8rem",color:"var(--text-soft)",marginBottom:8}}>כמה דקות?</p>
                 <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:16}}>
