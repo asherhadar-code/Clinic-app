@@ -84,7 +84,6 @@ export default async function handler(req, res) {
             quantity: 1,
             price: parseFloat(amount),
             currency: "ILS",
-            vatType: 0,
           },
         ],
         payment: [
