@@ -1269,12 +1269,13 @@ export default function App() {
     if (type === "pre_session") generatePreSession(patient);
     if (type === "receipt") {
       setReceiptData({
-        amount: settings.defaultPrice || "",
+        amount: "",
         method: "ביט",
         note: "",
         email: patient?.email || "",
         phone: patient?.phone || ""
       });
+      setSelectedAppointmentIds([]);
     }
   };
 
@@ -1828,11 +1829,11 @@ ${styleExamples ? `להלן דוגמאות לסגנון הכתיבה של הקל
                   const checked = selectedAppointmentIds.includes(a.id);
                   return (
                     <div key={a.id} onClick={() => {
-                      setSelectedAppointmentIds(prev =>
-                        checked ? prev.filter(id => id !== a.id) : [...prev, a.id]
-                      );
-                      const count = checked ? selectedAppointmentIds.length - 1 : selectedAppointmentIds.length + 1;
-                      setReceiptData(prev => ({ ...prev, amount: String(count * pricePerSession) }));
+                      const newIds = checked
+                        ? selectedAppointmentIds.filter(id => id !== a.id)
+                        : [...selectedAppointmentIds, a.id];
+                      setSelectedAppointmentIds(newIds);
+                      setReceiptData(prev => ({ ...prev, amount: String(newIds.length * pricePerSession) }));
                     }} style={{
                       display:"flex",alignItems:"center",gap:10,
                       padding:"7px 10px",borderRadius:8,cursor:"pointer",marginBottom:4,
