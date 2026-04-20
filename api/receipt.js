@@ -98,6 +98,7 @@ export default async function handler(req, res) {
     });
 
     const receiptData = await receiptRes.json();
+    console.log("GI Response:", JSON.stringify(receiptData));
     if (receiptData.errorMessage) throw new Error(receiptData.errorMessage);
 
     return res.status(200).json({
