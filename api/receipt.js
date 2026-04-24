@@ -93,7 +93,7 @@ export default async function handler(req, res) {
         payment: [
           {
             type: paymentTypeMap[paymentMethod] || 1,
-            price: priceBeforeVat,
+            price: fullAmount,
             currency: "ILS",
             date: new Date().toISOString().split("T")[0],
           },
