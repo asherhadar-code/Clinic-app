@@ -2885,6 +2885,7 @@ function Calendar({ patients, appointments, setAppointments, openModal, sendWhat
                 <div key={b.id}>
                   {b.type === "treatment" ? (
                     <div
+                      onClick={e => e.stopPropagation()}
                       onMouseDown={e => {
                         e.currentTarget._pressTimer = setTimeout(() => {
                           updateStatus(b.id, "pending");
