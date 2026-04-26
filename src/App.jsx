@@ -2884,21 +2884,33 @@ function Calendar({ patients, appointments, setAppointments, openModal, sendWhat
               {timeline.map((b, bi) => (
                 <div key={b.id}>
                   {b.type === "treatment" ? (
-                    <div onClick={e => {
-                      if (b.status !== "pending") updateStatus(b.id, "pending");
-                    }} style={{
-                      background: b.status==="arrived" ? "#E8F5E8" : b.status==="cancelled" ? "#FBE8E3" : "var(--sage-light)",
-                      border: `2px solid ${b.status==="arrived" ? "#4CAF50" : b.status==="cancelled" ? "#C4724A" : "var(--sage)"}`,
-                      borderRadius:10, padding:"8px 10px", marginBottom:2, position:"relative",
-                      cursor: b.status !== "pending" ? "pointer" : "default"
-                    }}>
-                      <div onClick={e=>e.stopPropagation()} style={{fontSize:"0.68rem",color:"var(--text-soft)"}}>{b.startTime}–{b.endTime}</div>
+                    <div
+                      onMouseDown={e => {
+                        e.currentTarget._pressTimer = setTimeout(() => {
+                          updateStatus(b.id, "pending");
+                        }, 600);
+                      }}
+                      onMouseUp={e => clearTimeout(e.currentTarget._pressTimer)}
+                      onMouseLeave={e => clearTimeout(e.currentTarget._pressTimer)}
+                      onTouchStart={e => {
+                        e.currentTarget._pressTimer = setTimeout(() => {
+                          updateStatus(b.id, "pending");
+                        }, 600);
+                      }}
+                      onTouchEnd={e => clearTimeout(e.currentTarget._pressTimer)}
+                      style={{
+                        background: b.status==="arrived" ? "#E8F5E8" : b.status==="cancelled" ? "#FBE8E3" : "var(--sage-light)",
+                        border: `2px solid ${b.status==="arrived" ? "#4CAF50" : b.status==="cancelled" ? "#C4724A" : "var(--sage)"}`,
+                        borderRadius:10, padding:"8px 10px", marginBottom:2, position:"relative",
+                        userSelect:"none"
+                      }}>
+                      <div style={{fontSize:"0.68rem",color:"var(--text-soft)"}}>{b.startTime}–{b.endTime}</div>
                       <div style={{fontWeight:600,fontSize:"0.82rem",color:"var(--sage-dark)",marginTop:1,cursor:"pointer",textDecoration:"underline dotted"}}
                         onClick={e=>{e.stopPropagation();
                           const pt = patients.find(p=>p.id===b.patientId||p.name===b.patientName);
                           if(pt){onSelectPatient(pt);}
                         }}>{b.patientName} {b.paid ? "👑" : ""}</div>
-                      <div onClick={e=>e.stopPropagation()} style={{fontSize:"0.68rem",marginTop:2,color:
+                      <div style={{fontSize:"0.68rem",marginTop:2,color:
                         b.status==="arrived"?"#2E7D32":b.status==="cancelled"?"#C4724A":b.status==="confirmed"?"#4CAF50":"#FFA000"}}>
                         {b.status==="arrived"?"✅ הגיע":b.status==="cancelled"?"❌ בוטל":b.status==="confirmed"?"✅ אישר":"⏳ ממתין"}
                       </div>
@@ -2932,6 +2944,13 @@ function Calendar({ patients, appointments, setAppointments, openModal, sendWhat
                           style={{flex:1,padding:"3px 0",fontSize:"0.6rem",borderRadius:6,border:"none",
                             background:"linear-gradient(135deg,#6C63FF,#8B85FF)",color:"white",cursor:"pointer"}}>
                           📝 תיעוד
+                        </button>
+                        <button onClick={e=>{e.stopPropagation(); updateStatus(b.id,"pending");}}
+                          title="אפס סטטוס"
+                          style={{padding:"3px 6px",fontSize:"0.65rem",borderRadius:6,border:"none",
+                            background:"#F5F5F5",color:"#8E8E93",cursor:"pointer",
+                            display: b.status==="pending" ? "none" : "block"}}>
+                          ↺
                         </button>
                       </div>
                       <span onClick={() => removeBlock(dateStr, b.id)}
