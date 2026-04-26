@@ -1107,16 +1107,6 @@ export default function App() {
     }
   };
 
-  // Show loading
-  if (authLoading) return (
-    <div style={{display:"flex",alignItems:"center",justifyContent:"center",height:"100vh",fontFamily:"inherit"}}>
-      <div style={{textAlign:"center"}}>
-        <div style={{fontSize:"2rem",marginBottom:8}}>🏥</div>
-        <div style={{color:"var(--text-soft)"}}>טוען...</div>
-      </div>
-    </div>
-  );
-
   // Login screen JSX — rendered conditionally below
   const loginScreen = (
     <div style={{
@@ -1796,6 +1786,15 @@ ${styleExamples ? `להלן דוגמאות לסגנון הכתיבה של הקל
         </div>
       </div>
     </>
+  );
+
+  if (authLoading) return (
+    <div style={{display:"flex",alignItems:"center",justifyContent:"center",height:"100vh",fontFamily:"inherit"}}>
+      <div style={{textAlign:"center"}}>
+        <div style={{fontSize:"2rem",marginBottom:8}}>🏥</div>
+        <div style={{color:"var(--text-soft)"}}>טוען...</div>
+      </div>
+    </div>
   );
 
   if (!user) return <>{loginScreen}</>;
