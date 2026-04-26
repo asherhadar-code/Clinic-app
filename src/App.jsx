@@ -1021,6 +1021,202 @@ export default function App() {
   const [page, setPage] = useState("dashboard");
   const [patients, setPatients] = useState([]);
   const [loading, setLoading] = useState(true);
+
+  // Auth state
+  const [user, setUser] = useState(null);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [authError, setAuthError] = useState("");
+  const [loginEmail, setLoginEmail] = useState("");
+  const [loginPassword, setLoginPassword] = useState("");
+  const [authMode, setAuthMode] = useState("login");
+  const [rememberMe, setRememberMe] = useState(false);
+
+  // Check existing session on load
+  useEffect(() => {
+    const stored = localStorage.getItem("supabase_session");
+    if (stored) {
+      try {
+        const session = JSON.parse(stored);
+        if (session?.access_token) {
+          setUser(session.user);
+        }
+      } catch {}
+    }
+    // Load remembered email
+    const rememberedEmail = localStorage.getItem("remembered_email");
+    const rememberedPassword = localStorage.getItem("remembered_password");
+    if (rememberedEmail) {
+      setLoginEmail(rememberedEmail);
+      setRememberMe(true);
+    }
+    if (rememberedPassword) {
+      setLoginPassword(rememberedPassword);
+    }
+    setAuthLoading(false);
+  }, []);
+
+  const handleAuth = async () => {
+    setAuthError("");
+    if (!loginEmail || !loginPassword) {
+      setAuthError("נא למלא מייל וסיסמה");
+      return;
+    }
+    try {
+      const endpoint = authMode === "login"
+        ? `${SUPABASE_URL}/auth/v1/token?grant_type=password`
+        : `${SUPABASE_URL}/auth/v1/signup`;
+      const res = await fetch(endpoint, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "apikey": SUPABASE_KEY,
+        },
+        body: JSON.stringify({ email: loginEmail, password: loginPassword }),
+      });
+      const data = await res.json();
+      if (data.error || data.error_description) {
+        setAuthError(authMode === "login" ? "מייל או סיסמה שגויים" : data.error_description || "שגיאה בהרשמה");
+        return;
+      }
+      if (data.access_token) {
+        localStorage.setItem("supabase_session", JSON.stringify(data));
+        if (rememberMe) {
+          localStorage.setItem("remembered_email", loginEmail);
+          localStorage.setItem("remembered_password", loginPassword);
+        } else {
+          localStorage.removeItem("remembered_email");
+          localStorage.removeItem("remembered_password");
+        }
+        setUser(data.user);
+      } else {
+        setAuthError("משהו השתבש, נסה שוב");
+      }
+    } catch {
+      setAuthError("שגיאת חיבור, נסה שוב");
+    }
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem("supabase_session");
+    setUser(null);
+    // Keep remembered credentials
+    const rememberedEmail = localStorage.getItem("remembered_email");
+    if (!rememberedEmail) {
+      setLoginEmail("");
+      setLoginPassword("");
+    }
+  };
+
+  // Show loading
+  if (authLoading) return (
+    <div style={{display:"flex",alignItems:"center",justifyContent:"center",height:"100vh",fontFamily:"inherit"}}>
+      <div style={{textAlign:"center"}}>
+        <div style={{fontSize:"2rem",marginBottom:8}}>🏥</div>
+        <div style={{color:"var(--text-soft)"}}>טוען...</div>
+      </div>
+    </div>
+  );
+
+  // Show login screen if not authenticated
+  if (!user) return (
+    <div style={{
+      minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",
+      background:"linear-gradient(135deg,#EEF2FF 0%,#F5F3FF 100%)",
+      fontFamily:"inherit",direction:"rtl",padding:"1rem"
+    }}>
+      <div style={{
+        background:"white",borderRadius:24,padding:"2rem 1.5rem",
+        width:"100%",maxWidth:360,
+        boxShadow:"0 20px 60px rgba(99,102,241,0.15)"
+      }}>
+        <div style={{textAlign:"center",marginBottom:"1.5rem"}}>
+          <div style={{fontSize:"2.5rem",marginBottom:8}}>🏥</div>
+          <div style={{fontSize:"1.4rem",fontWeight:700,color:"#6366F1"}}>ClinicUp</div>
+          <div style={{fontSize:"0.8rem",color:"var(--text-soft)",marginTop:4}}>מערכת ניהול קליניקה</div>
+        </div>
+
+        <div style={{display:"flex",gap:4,background:"#F5F5F5",borderRadius:12,padding:3,marginBottom:"1.2rem"}}>
+          {[["login","התחברות"],["signup","הרשמה"]].map(([mode,label]) => (
+            <div key={mode} onClick={() => { setAuthMode(mode); setAuthError(""); }}
+              style={{
+                flex:1,textAlign:"center",padding:"8px",borderRadius:10,cursor:"pointer",
+                fontSize:"0.85rem",fontWeight:authMode===mode?600:400,
+                background:authMode===mode?"white":"transparent",
+                color:authMode===mode?"#6366F1":"var(--text-soft)",
+                boxShadow:authMode===mode?"0 1px 4px rgba(0,0,0,0.08)":"none",
+                transition:"all 0.15s"
+              }}>{label}</div>
+          ))}
+        </div>
+
+        <div style={{marginBottom:12}}>
+          <div style={{fontSize:"0.8rem",color:"var(--text-soft)",marginBottom:4}}>כתובת מייל</div>
+          <input
+            type="email"
+            placeholder="example@gmail.com"
+            value={loginEmail}
+            onChange={e => setLoginEmail(e.target.value)}
+            onKeyDown={e => e.key === "Enter" && handleAuth()}
+            style={{
+              width:"100%",padding:"10px 12px",borderRadius:10,
+              border:"1.5px solid #E0E7FF",fontSize:"0.9rem",
+              direction:"ltr",textAlign:"right",outline:"none",
+              fontFamily:"inherit",boxSizing:"border-box"
+            }}
+          />
+        </div>
+
+        <div style={{marginBottom:16}}>
+          <div style={{fontSize:"0.8rem",color:"var(--text-soft)",marginBottom:4}}>סיסמה</div>
+          <input
+            type="password"
+            placeholder="••••••••"
+            value={loginPassword}
+            onChange={e => setLoginPassword(e.target.value)}
+            onKeyDown={e => e.key === "Enter" && handleAuth()}
+            style={{
+              width:"100%",padding:"10px 12px",borderRadius:10,
+              border:"1.5px solid #E0E7FF",fontSize:"0.9rem",
+              direction:"ltr",textAlign:"right",outline:"none",
+              fontFamily:"inherit",boxSizing:"border-box"
+            }}
+          />
+        </div>
+
+        {authError && (
+          <div style={{
+            background:"#FFF1F2",color:"#E11D48",fontSize:"0.8rem",
+            padding:"8px 12px",borderRadius:8,marginBottom:12,textAlign:"center"
+          }}>{authError}</div>
+        )}
+
+        {authMode === "login" && (
+          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:14,cursor:"pointer"}}
+            onClick={() => setRememberMe(p => !p)}>
+            <div style={{
+              width:20,height:20,borderRadius:6,flexShrink:0,
+              background: rememberMe ? "#6366F1" : "white",
+              border:`2px solid ${rememberMe ? "#6366F1" : "#C7D2FE"}`,
+              display:"flex",alignItems:"center",justifyContent:"center",
+              transition:"all 0.15s"
+            }}>
+              {rememberMe && <span style={{color:"white",fontSize:13,fontWeight:700}}>✓</span>}
+            </div>
+            <span style={{fontSize:"0.82rem",color:"var(--text-soft)"}}>זכור אותי</span>
+          </div>
+        )}
+
+        <button onClick={handleAuth} style={{
+          width:"100%",padding:"12px",borderRadius:12,border:"none",
+          background:"#6366F1",color:"white",fontSize:"1rem",
+          fontWeight:600,cursor:"pointer",fontFamily:"inherit",
+          boxShadow:"0 4px 12px rgba(99,102,241,0.3)"
+        }}>
+          {authMode === "login" ? "כניסה" : "הרשמה"}
+        </button>
+      </div>
+    </div>
+  );
   const [settings, setSettings] = useState({
     clinicName: "",
     therapistName: "",
@@ -1606,7 +1802,7 @@ ${styleExamples ? `להלן דוגמאות לסגנון הכתיבה של הקל
     <>
       <style>{CSS}</style>
       <div className="app">
-        <Sidebar page={page} setPage={(p) => { setPage(p); setSelectedPatient(null); setShowPatientsDrawer(false); }} leadsCount={leads.filter(l => l.status === "waiting").length} openPatientsDrawer={() => setShowPatientsDrawer(true)} />
+        <Sidebar page={page} setPage={(p) => { setPage(p); setSelectedPatient(null); setShowPatientsDrawer(false); }} leadsCount={leads.filter(l => l.status === "waiting").length} openPatientsDrawer={() => setShowPatientsDrawer(true)} onLogout={handleLogout} />
         <main className="main">
           {notification && <div className="banner">🔔 {notification}</div>}
 
@@ -2086,7 +2282,7 @@ ${styleExamples ? `להלן דוגמאות לסגנון הכתיבה של הקל
 }
 
 // ── Sidebar ────────────────────────────────────────────────────────
-function Sidebar({ page, setPage, leadsCount, openPatientsDrawer }) {
+function Sidebar({ page, setPage, leadsCount, openPatientsDrawer, onLogout }) {
   const patientsSubPages = ["patients_list","receipts","patients_archive"];
   const isPatientsSection = patientsSubPages.includes(page) || page === "patients" || page === "patient_detail";
 
@@ -2148,6 +2344,9 @@ function Sidebar({ page, setPage, leadsCount, openPatientsDrawer }) {
           )}
         </div>
       ))}
+      <div onClick={onLogout} className="nav-item" style={{marginTop:"auto",opacity:0.7,cursor:"pointer"}}>
+        <span className="nav-icon">🚪</span>יציאה
+      </div>
     </aside>
   );
 }
