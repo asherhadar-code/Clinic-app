@@ -2905,15 +2905,19 @@ function Calendar({ patients, appointments, setAppointments, openModal, sendWhat
                         borderRadius:10, padding:"8px 10px", marginBottom:2, position:"relative",
                         userSelect:"none"
                       }}>
-                      <div style={{fontSize:"0.68rem",color:"var(--text-soft)"}}>{b.startTime}–{b.endTime}</div>
-                      <div style={{fontWeight:600,fontSize:"0.82rem",color:"var(--sage-dark)",marginTop:1,cursor:"pointer",textDecoration:"underline dotted"}}
-                        onClick={e=>{e.stopPropagation();
-                          const pt = patients.find(p=>p.id===b.patientId||p.name===b.patientName);
-                          if(pt){onSelectPatient(pt);}
-                        }}>{b.patientName} {b.paid ? "👑" : ""}</div>
-                      <div style={{fontSize:"0.68rem",marginTop:2,color:
-                        b.status==="arrived"?"#2E7D32":b.status==="cancelled"?"#C4724A":b.status==="confirmed"?"#4CAF50":"#FFA000"}}>
-                        {b.status==="arrived"?"✅ הגיע":b.status==="cancelled"?"❌ בוטל":b.status==="confirmed"?"✅ אישר":"⏳ ממתין"}
+                      <div style={{fontSize:"0.68rem",color:"var(--text-soft)",display:"inline-block"}}>{b.startTime}–{b.endTime}</div>
+                      <div style={{fontWeight:600,fontSize:"0.82rem",color:"var(--sage-dark)",marginTop:1}}>
+                        <span style={{cursor:"pointer",textDecoration:"underline dotted"}}
+                          onClick={e=>{e.stopPropagation();
+                            const pt = patients.find(p=>p.id===b.patientId||p.name===b.patientName);
+                            if(pt){onSelectPatient(pt);}
+                          }}>{b.patientName}</span>
+                        {b.paid ? " 👑" : ""}
+                      </div>
+                      <div style={{fontSize:"0.68rem",marginTop:2}}>
+                        <span style={{color:b.status==="arrived"?"#2E7D32":b.status==="cancelled"?"#C4724A":b.status==="confirmed"?"#4CAF50":"#FFA000"}}>
+                          {b.status==="arrived"?"✅ הגיע":b.status==="cancelled"?"❌ בוטל":b.status==="confirmed"?"✅ אישר":"⏳ ממתין"}
+                        </span>
                       </div>
                       <div style={{display:"flex",gap:4,marginTop:6}}>
                         <button onClick={e=>{e.stopPropagation();updateStatus(b.id,"arrived");}}
