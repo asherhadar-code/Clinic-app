@@ -1117,8 +1117,8 @@ export default function App() {
     </div>
   );
 
-  // Show login screen if not authenticated
-  if (!user) return (
+  // Login screen JSX — rendered conditionally below
+  const loginScreen = (
     <div style={{
       minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",
       background:"linear-gradient(135deg,#EEF2FF 0%,#F5F3FF 100%)",
@@ -1797,6 +1797,8 @@ ${styleExamples ? `להלן דוגמאות לסגנון הכתיבה של הקל
       </div>
     </>
   );
+
+  if (!user) return <>{loginScreen}</>;
 
   return (
     <>
