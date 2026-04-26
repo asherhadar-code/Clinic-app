@@ -2884,10 +2884,15 @@ function Calendar({ patients, appointments, setAppointments, openModal, sendWhat
               {timeline.map((b, bi) => (
                 <div key={b.id}>
                   {b.type === "treatment" ? (
-                    <div style={{
+                    <div onClick={e => {
+                      if (e.target === e.currentTarget && b.status !== "pending") {
+                        updateStatus(b.id, "pending");
+                      }
+                    }} style={{
                       background: b.status==="arrived" ? "#E8F5E8" : b.status==="cancelled" ? "#FBE8E3" : "var(--sage-light)",
                       border: `2px solid ${b.status==="arrived" ? "#4CAF50" : b.status==="cancelled" ? "#C4724A" : "var(--sage)"}`,
-                      borderRadius:10, padding:"8px 10px", marginBottom:2, position:"relative"
+                      borderRadius:10, padding:"8px 10px", marginBottom:2, position:"relative",
+                      cursor: b.status !== "pending" ? "pointer" : "default"
                     }}>
                       <div style={{fontSize:"0.68rem",color:"var(--text-soft)"}}>{b.startTime}–{b.endTime}</div>
                       <div style={{fontWeight:600,fontSize:"0.82rem",color:"var(--sage-dark)",marginTop:1,cursor:"pointer",textDecoration:"underline dotted"}}
