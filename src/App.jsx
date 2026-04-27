@@ -185,6 +185,30 @@ const sb = {
       body: JSON.stringify({ patient_id: r.patientId, patient_name: r.patientName, amount: r.amount, method: r.method, note: r.note, receipt_number: r.receiptNumber })
     });
   },
+  async saveAiNote(patientId, patientName, content) {
+    if (!SUPABASE_URL || !SUPABASE_KEY) return;
+    await fetch(`${SUPABASE_URL}/rest/v1/ai_notes`, {
+      method: "POST",
+      headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ patient_id: patientId, patient_name: patientName, content })
+    });
+  },
+  async getAiNotes(patientId) {
+    if (!SUPABASE_URL || !SUPABASE_KEY) return [];
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/ai_notes?patient_id=eq.${patientId}&order=created_at.desc`, {
+      headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` }
+    });
+    if (!res.ok) return [];
+    const data = await res.json();
+    return Array.isArray(data) ? data : [];
+  },
+  async deleteAiNote(id) {
+    if (!SUPABASE_URL || !SUPABASE_KEY) return;
+    await fetch(`${SUPABASE_URL}/rest/v1/ai_notes?id=eq.${id}`, {
+      method: "DELETE",
+      headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` }
+    });
+  },
   async getSettings() {
     if (!SUPABASE_URL || !SUPABASE_KEY) return {};
     const res = await fetch(`${SUPABASE_URL}/rest/v1/settings?select=key,value`, {
@@ -2202,7 +2226,23 @@ ${styleExamples ? `להלן דוגמאות לסגנון הכתיבה של הקל
           {/* Chat messages */}
           <div className="ai-chat-box" id="chatBox">
             {aiChatMessages.map((m, i) => (
-              <div key={i} className={`ai-chat-msg ${m.role}`}>{m.text}</div>
+              <div key={i} className={`ai-chat-msg ${m.role}`} style={{position:"relative"}}>
+                {m.text}
+                {m.role === "assistant" && (
+                  <button
+                    onClick={async () => {
+                      await sb.saveAiNote(aiChatPatient.id, aiChatPatient.name, m.text);
+                      showNotification("📌 ההערה נשמרה בתיק המטופל!");
+                    }}
+                    title="שמור לתיק"
+                    style={{
+                      position:"absolute", top:4, left:4,
+                      background:"rgba(99,102,241,0.15)", border:"none",
+                      borderRadius:6, cursor:"pointer", fontSize:"0.75rem",
+                      padding:"2px 6px", color:"#6366F1", fontWeight:600
+                    }}>📌</button>
+                )}
+              </div>
             ))}
             {aiChatLoading && (
               <div className="ai-chat-msg assistant">
@@ -3246,6 +3286,19 @@ function EditableSession({ session, patientId, onUpdated, isLatest }) {
 // ── Patient Detail ─────────────────────────────────────────────────
 function PatientDetail({ patient, onBack, openModal, generateReport, aiText, aiLoading, openAiChat, documents, addDocument, removeDocument, onEdit, onDelete, onSessionUpdated }) {
   const [tab, setTab] = useState("history");
+  const [aiNotes, setAiNotes] = useState([]);
+  const [aiNotesLoaded, setAiNotesLoaded] = useState(false);
+  const [editingNoteId, setEditingNoteId] = useState(null);
+  const [editingNoteText, setEditingNoteText] = useState("");
+
+  useEffect(() => {
+    if (tab === "ai_notes" && !aiNotesLoaded) {
+      sb.getAiNotes(patient.id).then(data => {
+        setAiNotes(Array.isArray(data) ? data : []);
+        setAiNotesLoaded(true);
+      });
+    }
+  }, [tab]);
 
   const docIcon = (type) => type === "report" ? "📄" : type === "summary" ? "📝" : "📎";
   const docLabel = (type) => type === "report" ? "דוח" : type === "summary" ? "סיכום" : "אחר";
@@ -3281,6 +3334,7 @@ function PatientDetail({ patient, onBack, openModal, generateReport, aiText, aiL
         <div className={`tab ${tab==="history"?"active":""}`} onClick={() => setTab("history")}>היסטוריה</div>
         <div className={`tab ${tab==="docs"?"active":""}`} onClick={() => setTab("docs")}>מסמכים {documents.length > 0 && `(${documents.length})`}</div>
         <div className={`tab ${tab==="info"?"active":""}`} onClick={() => setTab("info")}>מידע כללי</div>
+        <div className={`tab ${tab==="ai_notes"?"active":""}`} onClick={() => setTab("ai_notes")}>📌 הערות AI {aiNotes.length > 0 && `(${aiNotes.length})`}</div>
       </div>
 
       {tab === "history" && (() => {
@@ -3394,11 +3448,91 @@ function PatientDetail({ patient, onBack, openModal, generateReport, aiText, aiL
           </div>
         </div>
       )}
+      {tab === "ai_notes" && (
+        <div className="card">
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+            <h3 style={{margin:0}}>📌 הערות AI שמורות</h3>
+            <button className="btn btn-secondary btn-sm" onClick={() => openAiChat(patient)}>🤖 פתח עוזר AI</button>
+          </div>
+          {!aiNotesLoaded ? (
+            <div style={{color:"var(--text-soft)",fontSize:"0.85rem"}}>טוען...</div>
+          ) : aiNotes.length === 0 ? (
+            <div style={{color:"var(--text-soft)",fontSize:"0.85rem",textAlign:"center",padding:"20px 0"}}>
+              אין הערות שמורות עדיין.<br/>
+              <span style={{fontSize:"0.8rem"}}>לחץ על 📌 בצ'אט עם ה-AI כדי לשמור הערה</span>
+            </div>
+          ) : (
+            <div style={{display:"flex",flexDirection:"column",gap:10}}>
+              {aiNotes.map(note => (
+                <div key={note.id} style={{
+                  background:"#EEF2FF",borderRadius:12,padding:"10px 14px",
+                  border:"1px solid #C7D2FE",position:"relative"
+                }}>
+                  <div style={{fontSize:"0.75rem",color:"#6366F1",marginBottom:6,fontWeight:500}}>
+                    {new Date(note.created_at).toLocaleDateString("he-IL")} · {new Date(note.created_at).toLocaleTimeString("he-IL",{hour:"2-digit",minute:"2-digit"})}
+                  </div>
+
+                  {editingNoteId === note.id ? (
+                    <>
+                      <textarea
+                        value={editingNoteText}
+                        onChange={e => setEditingNoteText(e.target.value)}
+                        style={{
+                          width:"100%",minHeight:80,fontSize:"0.85rem",
+                          borderRadius:8,border:"1.5px solid #6366F1",
+                          padding:"6px 8px",fontFamily:"inherit",
+                          resize:"vertical",boxSizing:"border-box"
+                        }}
+                      />
+                      <div style={{display:"flex",gap:6,marginTop:6}}>
+                        <button onClick={async () => {
+                          await fetch(`${SUPABASE_URL}/rest/v1/ai_notes?id=eq.${note.id}`, {
+                            method: "PATCH",
+                            headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json" },
+                            body: JSON.stringify({ content: editingNoteText })
+                          });
+                          setAiNotes(prev => prev.map(n => n.id === note.id ? {...n, content: editingNoteText} : n));
+                          setEditingNoteId(null);
+                        }} style={{padding:"4px 12px",fontSize:"0.8rem",borderRadius:8,border:"none",background:"#6366F1",color:"white",cursor:"pointer"}}>
+                          שמור
+                        </button>
+                        <button onClick={() => setEditingNoteId(null)}
+                          style={{padding:"4px 12px",fontSize:"0.8rem",borderRadius:8,border:"1px solid #E0E7FF",background:"white",cursor:"pointer"}}>
+                          ביטול
+                        </button>
+                      </div>
+                    </>
+                  ) : (
+                    <div style={{fontSize:"0.85rem",color:"var(--text)",lineHeight:1.6,whiteSpace:"pre-wrap"}}>{note.content}</div>
+                  )}
+
+                  {editingNoteId !== note.id && (
+                    <div style={{position:"absolute",top:8,left:8,display:"flex",gap:4}}>
+                      <button onClick={() => {
+                        setEditingNoteId(note.id);
+                        setEditingNoteText(note.content);
+                      }} title="ערוך" style={{
+                        background:"none",border:"none",cursor:"pointer",
+                        fontSize:"0.8rem",color:"#6366F1",opacity:0.7,padding:2
+                      }}>✏️</button>
+                      <button onClick={async () => {
+                        await sb.deleteAiNote(note.id);
+                        setAiNotes(prev => prev.filter(n => n.id !== note.id));
+                      }} title="מחק" style={{
+                        background:"none",border:"none",cursor:"pointer",
+                        fontSize:"0.8rem",color:"#C4724A",opacity:0.7,padding:2
+                      }}>🗑️</button>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </>
   );
 }
-
-// ── Receipts ───────────────────────────────────────────────────────
 function Receipts({ patients, openModal, receiptsHistory }) {
   return (
     <>
