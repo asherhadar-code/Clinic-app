@@ -1152,6 +1152,7 @@ export default function App() {
           <div style={{fontSize:"0.8rem",color:"var(--text-soft)",marginBottom:4}}>סיסמה</div>
           <input
             type="password"
+            autoComplete="new-password"
             placeholder="••••••••"
             value={loginPassword}
             onChange={e => setLoginPassword(e.target.value)}
