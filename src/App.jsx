@@ -1033,25 +1033,20 @@ export default function App() {
 
   // Check existing session on load
   useEffect(() => {
-    const stored = localStorage.getItem("supabase_session");
-    if (stored) {
-      try {
-        const session = JSON.parse(stored);
-        if (session?.access_token) {
-          setUser(session.user);
-        }
-      } catch {}
-    }
-    // Load remembered email
+    // Always show login screen — clear session on load
+    localStorage.removeItem("supabase_session");
+
+    // Always restore email
     const rememberedEmail = localStorage.getItem("remembered_email");
+    if (rememberedEmail) setLoginEmail(rememberedEmail);
+
+    // Restore password only if rememberMe was set
     const rememberedPassword = localStorage.getItem("remembered_password");
-    if (rememberedEmail) {
-      setLoginEmail(rememberedEmail);
-      setRememberMe(true);
-    }
     if (rememberedPassword) {
       setLoginPassword(rememberedPassword);
+      setRememberMe(true);
     }
+
     setAuthLoading(false);
   }, []);
 
@@ -1079,12 +1074,12 @@ export default function App() {
         return;
       }
       if (data.access_token) {
-        localStorage.setItem("supabase_session", JSON.stringify(data));
+        // Always save email
+        localStorage.setItem("remembered_email", loginEmail);
+        // Save password only if rememberMe
         if (rememberMe) {
-          localStorage.setItem("remembered_email", loginEmail);
           localStorage.setItem("remembered_password", loginPassword);
         } else {
-          localStorage.removeItem("remembered_email");
           localStorage.removeItem("remembered_password");
         }
         setUser(data.user);
@@ -1097,12 +1092,9 @@ export default function App() {
   };
 
   const handleLogout = () => {
-    localStorage.removeItem("supabase_session");
     setUser(null);
-    // Keep remembered credentials
-    const rememberedEmail = localStorage.getItem("remembered_email");
-    if (!rememberedEmail) {
-      setLoginEmail("");
+    // Keep email always, clear password if not rememberMe
+    if (!rememberMe) {
       setLoginPassword("");
     }
   };
