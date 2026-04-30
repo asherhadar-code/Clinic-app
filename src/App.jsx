@@ -3127,7 +3127,6 @@ function Calendar({ patients, appointments, setAppointments, openModal, sendWhat
             </div>
           );
         })}
-      </div>
 
       {/* Add block modal */}
       {addModal && (
