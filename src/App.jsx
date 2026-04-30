@@ -2956,13 +2956,13 @@ function Calendar({ patients, appointments, setAppointments, openModal, sendWhat
             const dateStr = fmt(date);
             const dayItems = (buildTimeline(dateStr)||[]).filter(b=>b.type==="treatment");
             const dayBreaks = (buildTimeline(dateStr)||[]).filter(b=>b.type==="break").length;
-            const today = isToday(date);
+            const todayFlag = isToday(date);
             const statusColors = { arrived:"#16A34A", pending:"#6366F1", confirmed:"#22C55E", cancelled:"#E11D48" };
             return (
-              <div key={dateStr} style={{background:"white",borderRadius:12,padding:"10px 12px",border:today?"2px solid #6366F1":"1px solid #E8E8F0"}}>
+              <div key={dateStr} style={{background:"white",borderRadius:12,padding:"10px 12px",border:todayFlag?"2px solid #6366F1":"1px solid #E8E8F0"}}>
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:dayItems.length?8:0}}>
-                  <div style={{fontWeight:700,fontSize:"0.85rem",color:today?"#6366F1":"var(--text)"}}>
-                    {WEEK_DAYS_HE[date.getDay()]} {today?"⭐":""}
+                  <div style={{fontWeight:700,fontSize:"0.85rem",color:todayFlag?"#6366F1":"var(--text)"}}>
+                    {WEEK_DAYS_HE[date.getDay()]} {todayFlag?"⭐":""}
                   </div>
                   <div style={{fontSize:"0.72rem",color:"var(--text-soft)"}}>
                     {date.toLocaleDateString("he-IL",{day:"numeric",month:"numeric"})} · {dayItems.length} מטופלים{dayBreaks?` · ${dayBreaks} הפסקות`:""}
