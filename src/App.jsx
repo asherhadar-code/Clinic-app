@@ -2995,7 +2995,7 @@ function Calendar({ patients, appointments, setAppointments, openModal, sendWhat
       {/* Action popup */}
       {activePopupBlock && (
         <div className="modal-overlay" onClick={()=>setActivePopupBlock(null)}>
-          <div style={{position:"fixed",bottom:0,left:"50%",transform:"translateX(-50%)",width:"100%",maxWidth:480,background:"white",borderRadius:"20px 20px 0 0",padding:"16px 16px 32px",zIndex:1000,boxShadow:"0 -4px 20px rgba(0,0,0,0.15)"}} onClick={e=>e.stopPropagation()}>
+          <div className="modal" style={{width:320}} onClick={e=>e.stopPropagation()}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
               <div>
                 <div style={{fontWeight:700,fontSize:"0.95rem",color:"var(--text)"}}>{activePopupBlock.b.patientName}</div>
