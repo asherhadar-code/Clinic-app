@@ -2915,14 +2915,15 @@ function Calendar({ patients, appointments, setAppointments, openModal, sendWhat
                       {/* Row 2: time + actions */}
                       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                         <span style={{fontSize:"0.8rem",fontWeight:600,color:"#555"}}>{b.startTime}–{b.endTime}</span>
-                        <div style={{display:"flex",alignItems:"center",gap:5}}>
+                        <div style={{display:"flex",alignItems:"center",gap:6}}>
                           {b.status!=="pending" && (
                             <button onClick={e=>{e.stopPropagation();updateStatus(b.id,"pending");}} title="אפס"
-                              style={{background:"none",border:"none",cursor:"pointer",fontSize:"0.7rem",color:"#8E8E93",padding:0}}>↺</button>
+                              style={{background:"#F5F5F5",border:"none",borderRadius:8,cursor:"pointer",fontSize:"1rem",color:"#8E8E93",padding:"4px 8px",fontWeight:600}}>↺</button>
                           )}
-                          <span onClick={()=>removeBlock(dateStr,b.id)} style={{cursor:"pointer",fontSize:"0.7rem",color:"var(--terracotta)",opacity:0.5}}>✕</span>
+                          <button onClick={e=>{e.stopPropagation();removeBlock(dateStr,b.id);}}
+                            style={{background:"#FFF1F2",border:"none",borderRadius:8,cursor:"pointer",fontSize:"0.85rem",color:"#C4724A",padding:"4px 8px",fontWeight:600}}>✕</button>
                           <button onClick={e=>{e.stopPropagation();setActivePopupBlock({b,dateStr});}}
-                            style={{background:"#E5E5EA",border:"none",borderRadius:8,color:"#555",fontSize:"14px",padding:"4px 9px",fontWeight:700,cursor:"pointer",lineHeight:1}}>⋯</button>
+                            style={{background:"#E5E5EA",border:"none",borderRadius:8,color:"#555",fontSize:"1rem",padding:"4px 10px",fontWeight:700,cursor:"pointer",lineHeight:1}}>⋯</button>
                         </div>
                       </div>
                     </div>
