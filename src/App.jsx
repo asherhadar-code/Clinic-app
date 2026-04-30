@@ -2626,6 +2626,9 @@ function useHebrewCalendar(weekDates) {
 function Calendar({ patients, appointments, setAppointments, openModal, sendWhatsApp, settings, onSelectPatient, onOpenPostSession }) {
   const [dayStart, setDayStart] = useState("08:30");
   const makeId = () => Math.random().toString(36).slice(2,8);
+  const [calView, setCalView] = useState("day"); // "day" | "week"
+  const [currentDayIdx, setCurrentDayIdx] = useState(new Date().getDay());
+  const [activePopupBlock, setActivePopupBlock] = useState(null); // { b, dateStr }
 
   // Week navigation
   const [weekOffset, setWeekOffset] = useState(0);
@@ -2827,14 +2830,212 @@ function Calendar({ patients, appointments, setAppointments, openModal, sendWhat
           style={{padding:"4px 8px",border:"2px solid var(--warm)",borderRadius:8,fontFamily:"DM Sans,sans-serif",fontSize:"0.82rem",background:"var(--cream)"}} />
       </div>
 
-      {/* Week grid */}
-      <div className="week-grid">
-        {weekDates.map(date => {
-          const dateStr = fmt(date);
-          const timeline = buildTimeline(dateStr);
-          const dayName = WEEK_DAYS_HE[date.getDay()];
-          const dateLabel = date.toLocaleDateString("he-IL",{day:"numeric",month:"numeric"});
-          const today = isToday(date);
+      {/* View toggle */}
+      <div style={{display:"flex",gap:0,background:"#EEF2FF",borderRadius:10,overflow:"hidden",marginBottom:12}}>
+        {[["day","📅 יום"],["week","📆 שבוע"]].map(([v,label]) => (
+          <div key={v} onClick={() => setCalView(v)}
+            style={{flex:1,textAlign:"center",padding:"7px",cursor:"pointer",fontSize:"0.82rem",fontWeight:600,
+              background:calView===v?"#6366F1":"transparent",
+              color:calView===v?"white":"#6366F1",transition:"all 0.2s"}}>
+            {label}
+          </div>
+        ))}
+      </div>
+
+      {/* Day view */}
+      {calView === "day" && (() => {
+        const workDayDates = weekDates.filter(d => workDays.includes(d.getDay()));
+        const currentDate = workDayDates.find(d => d.getDay() === currentDayIdx) || workDayDates[0];
+        if (!currentDate) return null;
+        const dateStr = fmt(currentDate);
+        const timeline = buildTimeline(dateStr);
+        const dayName = WEEK_DAYS_HE[currentDate.getDay()];
+        const dateLabel = currentDate.toLocaleDateString("he-IL",{day:"numeric",month:"numeric"});
+        const today = isToday(currentDate);
+
+        const goPrev = () => {
+          const idx = workDayDates.findIndex(d=>d.getDay()===currentDayIdx);
+          if (idx > 0) setCurrentDayIdx(workDayDates[idx-1].getDay());
+          else { setWeekOffset(o=>o-1); setCurrentDayIdx(workDays[workDays.length-1]); }
+        };
+        const goNext = () => {
+          const idx = workDayDates.findIndex(d=>d.getDay()===currentDayIdx);
+          if (idx < workDayDates.length-1) setCurrentDayIdx(workDayDates[idx+1].getDay());
+          else { setWeekOffset(o=>o+1); setCurrentDayIdx(workDays[0]); }
+        };
+
+        return (
+          <div>
+            {/* Day nav */}
+            <div style={{background:"white",padding:"8px 12px",display:"flex",justifyContent:"space-between",alignItems:"center",borderRadius:14,marginBottom:10,boxShadow:"0 1px 4px rgba(0,0,0,0.06)"}}>
+              <button onClick={goPrev} style={{width:36,height:36,borderRadius:"50%",border:"none",background:"#EEF2FF",color:"#6366F1",fontSize:20,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>‹</button>
+              <div style={{textAlign:"center"}}>
+                <div style={{fontWeight:700,fontSize:"1rem",color:today?"#6366F1":"var(--text)"}}>{dayName} {today?"⭐":""}</div>
+                <div style={{fontSize:"0.75rem",color:"var(--text-soft)",marginTop:1}}>{dateLabel} · {getHebrewDate(currentDate)}</div>
+                {holidays[dateStr] && holidays[dateStr].slice(0,1).map((h,i) => {
+                  const translations = {"Erev Pesach":"ערב פסח","Pesach I":"פסח א׳","Yom Kippur":"יום כיפור","Rosh Hashana 5786":"ראש השנה","Rosh Hashana 5787":"ראש השנה","Yom HaAtzma'ut":"יום העצמאות","Shavuot I":"שבועות","Sukkot I":"סוכות","Chanukah: 1 Candle":"חנוכה","Purim":"פורים","Pesach VII":"פסח ז׳","Shmini Atzeret":"שמיני עצרת"};
+                  return <div key={i} style={{fontSize:"0.65rem",color:"#F57F17",marginTop:2}}>✡️ {translations[h]||h}</div>;
+                })}
+              </div>
+              <button onClick={goNext} style={{width:36,height:36,borderRadius:"50%",border:"none",background:"#EEF2FF",color:"#6366F1",fontSize:20,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>›</button>
+            </div>
+
+            {/* Timeline */}
+            <div>
+              <AddBtn onClick={() => { setAddModal({dateStr, insertAfterIdx:-1}); setAddType("treatment"); setPatientQ(""); }} />
+              {timeline.map((b, bi) => (
+                <div key={b.id}>
+                  {b.type === "treatment" ? (
+                    <div
+                      onClick={e => e.stopPropagation()}
+                      onMouseDown={e => { e.currentTarget._pressTimer = setTimeout(() => { updateStatus(b.id,"pending"); }, 600); }}
+                      onMouseUp={e => clearTimeout(e.currentTarget._pressTimer)}
+                      onMouseLeave={e => clearTimeout(e.currentTarget._pressTimer)}
+                      onTouchStart={e => { e.currentTarget._pressTimer = setTimeout(() => { updateStatus(b.id,"pending"); }, 600); }}
+                      onTouchEnd={e => clearTimeout(e.currentTarget._pressTimer)}
+                      style={{
+                        background: b.status==="arrived"?"#E8F5E8":b.status==="cancelled"?"#FBE8E3":"var(--sage-light)",
+                        border:`2px solid ${b.status==="arrived"?"#4CAF50":b.status==="cancelled"?"#C4724A":"var(--sage)"}`,
+                        borderRadius:10,padding:"8px 10px",marginBottom:2,position:"relative",
+                        display:"flex",alignItems:"center",justifyContent:"space-between",userSelect:"none"
+                      }}>
+                      <div style={{flex:1,minWidth:0}}>
+                        <div style={{display:"inline-block",fontWeight:700,fontSize:"0.82rem",color:"var(--sage-dark)"}}>
+                          <span style={{cursor:"pointer",textDecoration:"underline dotted"}}
+                            onClick={e=>{e.stopPropagation();
+                              const pt=patients.find(p=>p.id===b.patientId||p.name===b.patientName);
+                              if(pt)onSelectPatient(pt);
+                            }}>{b.patientName}</span>
+                          {b.paid?" 👑":""}
+                        </div>
+                        <div style={{fontSize:"0.68rem",color:"var(--text-soft)",marginTop:1}}>{b.startTime}–{b.endTime}</div>
+                        <div style={{fontSize:"0.68rem",marginTop:1}}>
+                          <span style={{color:b.status==="arrived"?"#2E7D32":b.status==="cancelled"?"#C4724A":b.status==="confirmed"?"#4CAF50":"#FFA000"}}>
+                            {b.status==="arrived"?"✅ הגיע":b.status==="cancelled"?"❌ בוטל":b.status==="confirmed"?"✅ אישר":"⏳ ממתין"}
+                          </span>
+                        </div>
+                      </div>
+                      <div style={{display:"flex",alignItems:"center",gap:6,flexShrink:0}}>
+                        {b.status!=="pending" && (
+                          <button onClick={e=>{e.stopPropagation();updateStatus(b.id,"pending");}} title="אפס"
+                            style={{background:"rgba(0,0,0,0.06)",border:"none",borderRadius:6,cursor:"pointer",fontSize:"0.75rem",color:"#8E8E93",padding:"2px 6px"}}>↺</button>
+                        )}
+                        <button onClick={e=>{e.stopPropagation();setActivePopupBlock({b,dateStr});}} 
+                          style={{background:"rgba(0,0,0,0.06)",border:"none",borderRadius:6,cursor:"pointer",fontSize:"16px",color:"#555",padding:"2px 6px",fontWeight:700,lineHeight:1}}>⋯</button>
+                        <span onClick={()=>removeBlock(dateStr,b.id)} style={{cursor:"pointer",fontSize:"0.7rem",color:"var(--terracotta)",opacity:0.7}}>✕</span>
+                      </div>
+                    </div>
+                  ) : b.type === "slot" ? (
+                    <div style={{background:"repeating-linear-gradient(45deg,white,white 6px,#E0F2FE 6px,#E0F2FE 12px)",border:"1.5px solid #7DD3FC",borderRadius:10,padding:"8px 10px",marginBottom:2,position:"relative"}}>
+                      <div style={{fontSize:"0.68rem",color:"#0369A1",marginBottom:4,fontWeight:500}}>🕐 שעת חלון · {b.startTime}–{b.endTime}</div>
+                      <div style={{display:"flex",gap:6,alignItems:"center",justifyContent:"space-between"}}>
+                        <button onClick={e=>{e.stopPropagation();setAddModal({dateStr,insertAfterIdx:-1,slotId:b.id,slotStartTime:b.startTime});setAddType("treatment");setPatientQ("");}}
+                          style={{flex:1,padding:"4px 8px",fontSize:"0.65rem",borderRadius:6,border:"none",background:"#0284C7",color:"white",cursor:"pointer",fontWeight:600}}>+ הוסף מטופל</button>
+                        <span onClick={()=>removeBlock(dateStr,b.id)} style={{cursor:"pointer",fontSize:"0.7rem",color:"var(--terracotta)",opacity:0.7}}>✕</span>
+                      </div>
+                    </div>
+                  ) : (
+                    <div style={{background:"repeating-linear-gradient(45deg,#f5f0e8,#f5f0e8 4px,#ede5d8 4px,#ede5d8 8px)",borderRadius:10,padding:"6px 10px",marginBottom:2,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                      <span style={{fontSize:"0.75rem",color:"var(--text-soft)"}}>☕ {b.startTime} ({b.minutes} דק&apos;)</span>
+                      <span onClick={()=>removeBlock(dateStr,b.id)} style={{cursor:"pointer",fontSize:"0.7rem",color:"var(--terracotta)"}}>✕</span>
+                    </div>
+                  )}
+                  <AddBtn onClick={() => { setAddModal({dateStr, insertAfterIdx:bi}); setAddType("treatment"); setPatientQ(""); }} />
+                </div>
+              ))}
+              {timeline.length===0 && <div style={{fontSize:"0.78rem",color:"var(--text-soft)",textAlign:"center",padding:"12px 0"}}>יום ריק</div>}
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* Week overview */}
+      {calView === "week" && (
+        <div style={{display:"flex",flexDirection:"column",gap:8}}>
+          {weekDates.map(date => {
+            const dateStr = fmt(date);
+            const dayItems = (buildTimeline(dateStr)||[]).filter(b=>b.type==="treatment");
+            const dayBreaks = (buildTimeline(dateStr)||[]).filter(b=>b.type==="break").length;
+            const today = isToday(date);
+            const statusColors = { arrived:"#16A34A", pending:"#6366F1", confirmed:"#22C55E", cancelled:"#E11D48" };
+            return (
+              <div key={dateStr} style={{background:"white",borderRadius:12,padding:"10px 12px",border:today?"2px solid #6366F1":"1px solid #E8E8F0"}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:dayItems.length?8:0}}>
+                  <div style={{fontWeight:700,fontSize:"0.85rem",color:today?"#6366F1":"var(--text)"}}>
+                    {WEEK_DAYS_HE[date.getDay()]} {today?"⭐":""}
+                  </div>
+                  <div style={{fontSize:"0.72rem",color:"var(--text-soft)"}}>
+                    {date.toLocaleDateString("he-IL",{day:"numeric",month:"numeric"})} · {dayItems.length} מטופלים{dayBreaks?` · ${dayBreaks} הפסקות`:""}
+                  </div>
+                </div>
+                {dayItems.length===0 ? (
+                  <div style={{fontSize:"0.75rem",color:"#C4C4C6",textAlign:"center",padding:"4px 0"}}>יום ריק</div>
+                ) : (
+                  <div style={{display:"flex",flexDirection:"column",gap:3}}>
+                    {dayItems.map(b => (
+                      <div key={b.id} onClick={()=>{setCurrentDayIdx(date.getDay());setCalView("day");setTimeout(()=>setActivePopupBlock({b,dateStr}),100);}}
+                        style={{display:"flex",alignItems:"center",gap:8,padding:"4px 6px",borderRadius:6,cursor:"pointer",
+                          background:b.status==="arrived"?"#E8F5E8":b.status==="cancelled"?"#FBE8E3":b.status==="confirmed"?"#F0FDF4":"#EEF2FF"}}>
+                        <div style={{width:8,height:8,borderRadius:"50%",background:statusColors[b.status]||"#6366F1",flexShrink:0}}/>
+                        <span style={{fontSize:"0.8rem",fontWeight:600,color:"var(--text)",flex:1}}>{b.patientName}</span>
+                        <span style={{fontSize:"0.7rem",color:"var(--text-soft)"}}>{b.startTime}</span>
+                        <span style={{fontSize:"0.7rem",fontWeight:600,color:statusColors[b.status]||"#6366F1"}}>
+                          {b.status==="arrived"?"הגיע":b.status==="cancelled"?"בוטל":b.status==="confirmed"?"אישר":"ממתין"}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Action popup */}
+      {activePopupBlock && (
+        <div className="modal-overlay" onClick={()=>setActivePopupBlock(null)}>
+          <div style={{position:"fixed",bottom:0,left:"50%",transform:"translateX(-50%)",width:"100%",maxWidth:480,background:"white",borderRadius:"20px 20px 0 0",padding:16,zIndex:1000}} onClick={e=>e.stopPropagation()}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+              <div>
+                <div style={{fontWeight:700,fontSize:"0.95rem",color:"var(--text)"}}>{activePopupBlock.b.patientName}</div>
+                <div style={{fontSize:"0.78rem",color:"var(--text-soft)",marginTop:2}}>{activePopupBlock.b.startTime}–{activePopupBlock.b.endTime}</div>
+              </div>
+              <div style={{display:"flex",alignItems:"center",gap:8}}>
+                {(() => {
+                  const s = activePopupBlock.b.status;
+                  const map = {arrived:{label:"הגיע",bg:"#DCFCE7",color:"#16A34A"},cancelled:{label:"בוטל",bg:"#FFE4E6",color:"#E11D48"},confirmed:{label:"אישר",bg:"#DCFCE7",color:"#16A34A"},pending:{label:"ממתין",bg:"#EEF2FF",color:"#6366F1"}};
+                  const sm = map[s]||map.pending;
+                  return <span style={{background:sm.bg,color:sm.color,fontSize:"0.75rem",fontWeight:600,padding:"2px 8px",borderRadius:20}}>{sm.label}</span>;
+                })()}
+                <button onClick={()=>setActivePopupBlock(null)} style={{background:"#F5F5F5",border:"none",borderRadius:"50%",width:26,height:26,cursor:"pointer",fontSize:13}}>✕</button>
+              </div>
+            </div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+              <button onClick={()=>{updateStatus(activePopupBlock.b.id,"arrived");setActivePopupBlock(null);}}
+                style={{padding:"10px",fontSize:"0.85rem",borderRadius:12,border:"none",cursor:"pointer",fontWeight:600,fontFamily:"inherit",
+                  background:activePopupBlock.b.status==="arrived"?"#16A34A":"#F0FDF4",
+                  color:activePopupBlock.b.status==="arrived"?"white":"#16A34A"}}>הגיע ✓</button>
+              <button onClick={()=>{updateStatus(activePopupBlock.b.id,"cancelled");setActivePopupBlock(null);}}
+                style={{padding:"10px",fontSize:"0.85rem",borderRadius:12,border:"none",cursor:"pointer",fontWeight:600,fontFamily:"inherit",
+                  background:activePopupBlock.b.status==="cancelled"?"#E11D48":"#FFF1F2",
+                  color:activePopupBlock.b.status==="cancelled"?"white":"#E11D48"}}>בוטל ✕</button>
+              <button onClick={()=>{
+                const patient=patients.find(p=>p.id===activePopupBlock.b.patientId||p.name===activePopupBlock.b.patientName);
+                const lastSummary=patient?.history?.[0]?.summary;
+                if(!lastSummary){alert("אין סיכום טיפול קודם");return;}
+                const u=new SpeechSynthesisUtterance(lastSummary);u.lang="he-IL";window.speechSynthesis.speak(u);
+                setActivePopupBlock(null);
+              }} style={{padding:"10px",fontSize:"0.85rem",borderRadius:12,border:"none",background:"#F5F5F5",color:"#3C3C3C",cursor:"pointer",fontFamily:"inherit"}}>🔊 סקירה</button>
+              <button onClick={()=>{
+                const pt=patients.find(p=>p.id===activePopupBlock.b.patientId||p.name===activePopupBlock.b.patientName);
+                if(pt)onOpenPostSession(pt);
+                setActivePopupBlock(null);
+              }} style={{padding:"10px",fontSize:"0.85rem",borderRadius:12,border:"none",background:"#6366F1",color:"white",cursor:"pointer",fontWeight:600,fontFamily:"inherit"}}>📝 תיעוד</button>
+            </div>
+          </div>
+        </div>
+      )}
 
           return (
             <div key={dateStr} style={{
@@ -2916,113 +3117,6 @@ function Calendar({ patients, appointments, setAppointments, openModal, sendWhat
 
               {timeline.map((b, bi) => (
                 <div key={b.id}>
-                  {b.type === "treatment" ? (
-                    <div
-                      onClick={e => e.stopPropagation()}
-                      onMouseDown={e => {
-                        e.currentTarget._pressTimer = setTimeout(() => {
-                          updateStatus(b.id, "pending");
-                        }, 600);
-                      }}
-                      onMouseUp={e => clearTimeout(e.currentTarget._pressTimer)}
-                      onMouseLeave={e => clearTimeout(e.currentTarget._pressTimer)}
-                      onTouchStart={e => {
-                        e.currentTarget._pressTimer = setTimeout(() => {
-                          updateStatus(b.id, "pending");
-                        }, 600);
-                      }}
-                      onTouchEnd={e => clearTimeout(e.currentTarget._pressTimer)}
-                      style={{
-                        background: b.status==="arrived" ? "#E8F5E8" : b.status==="cancelled" ? "#FBE8E3" : "var(--sage-light)",
-                        border: `2px solid ${b.status==="arrived" ? "#4CAF50" : b.status==="cancelled" ? "#C4724A" : "var(--sage)"}`,
-                        borderRadius:10, padding:"8px 10px", marginBottom:2, position:"relative",
-                        userSelect:"none"
-                      }}>
-                      <div style={{fontSize:"0.68rem",color:"var(--text-soft)",display:"inline-block"}}>{b.startTime}–{b.endTime}</div>
-                      <div style={{fontWeight:600,fontSize:"0.82rem",color:"var(--sage-dark)",marginTop:1}}>
-                        <span style={{cursor:"pointer",textDecoration:"underline dotted"}}
-                          onClick={e=>{e.stopPropagation();
-                            const pt = patients.find(p=>p.id===b.patientId||p.name===b.patientName);
-                            if(pt){onSelectPatient(pt);}
-                          }}>{b.patientName}</span>
-                        {b.paid ? " 👑" : ""}
-                      </div>
-                      <div style={{fontSize:"0.68rem",marginTop:2}}>
-                        <span style={{color:b.status==="arrived"?"#2E7D32":b.status==="cancelled"?"#C4724A":b.status==="confirmed"?"#4CAF50":"#FFA000"}}>
-                          {b.status==="arrived"?"✅ הגיע":b.status==="cancelled"?"❌ בוטל":b.status==="confirmed"?"✅ אישר":"⏳ ממתין"}
-                        </span>
-                      </div>
-                      <div style={{display:"flex",gap:4,marginTop:6}}>
-                        <button onClick={e=>{e.stopPropagation();updateStatus(b.id,"arrived");}}
-                          style={{flex:1,padding:"3px 0",fontSize:"0.6rem",borderRadius:6,border:"none",
-                            background:b.status==="arrived"?"#4CAF50":"#E8F5E8",color:b.status==="arrived"?"white":"#2E7D32",cursor:"pointer"}}>
-                          ✅ הגיע
-                        </button>
-                        <button onClick={e=>{e.stopPropagation();updateStatus(b.id,"cancelled");}}
-                          style={{flex:1,padding:"3px 0",fontSize:"0.6rem",borderRadius:6,border:"none",
-                            background:b.status==="cancelled"?"#C4724A":"#FBE8E3",color:b.status==="cancelled"?"white":"#C4724A",cursor:"pointer"}}>
-                          ❌ בוטל
-                        </button>
-                        <button onClick={e=>{e.stopPropagation();
-                          const patient = patients.find(p=>p.id===b.patientId||p.name===b.patientName);
-                          const lastSummary = patient?.history?.[0]?.summary;
-                          if (!lastSummary) { alert("אין סיכום טיפול קודם"); return; }
-                          const u = new SpeechSynthesisUtterance(lastSummary);
-                          u.lang = "he-IL";
-                          window.speechSynthesis.speak(u);
-                        }}
-                          style={{flex:1,padding:"3px 0",fontSize:"0.6rem",borderRadius:6,border:"none",
-                            background:"var(--warm)",color:"var(--sage-dark)",cursor:"pointer"}}>
-                          🔊 סקירה
-                        </button>
-                        <button onClick={e=>{e.stopPropagation();
-                          const pt = patients.find(p=>p.id===b.patientId||p.name===b.patientName);
-                          if(pt) onOpenPostSession(pt);
-                        }}
-                          style={{flex:1,padding:"3px 0",fontSize:"0.6rem",borderRadius:6,border:"none",
-                            background:"linear-gradient(135deg,#6C63FF,#8B85FF)",color:"white",cursor:"pointer"}}>
-                          📝 תיעוד
-                        </button>
-                        <button onClick={e=>{e.stopPropagation(); updateStatus(b.id,"pending");}}
-                          title="אפס סטטוס"
-                          style={{padding:"3px 6px",fontSize:"0.65rem",borderRadius:6,border:"none",
-                            background:"#F5F5F5",color:"#8E8E93",cursor:"pointer",
-                            display: b.status==="pending" ? "none" : "block"}}>
-                          ↺
-                        </button>
-                      </div>
-                      <span onClick={() => removeBlock(dateStr, b.id)}
-                        style={{position:"absolute",top:5,left:6,cursor:"pointer",fontSize:"0.7rem",color:"var(--terracotta)",opacity:0.7}}>✕</span>
-                    </div>
-                  ) : b.type === "slot" ? (
-                    <div style={{
-                      background:"repeating-linear-gradient(45deg,white,white 6px,#E0F2FE 6px,#E0F2FE 12px)",
-                      border:"1.5px solid #7DD3FC",
-                      borderRadius:10,padding:"8px 10px",marginBottom:2,position:"relative"
-                    }}>
-                      <div style={{fontSize:"0.68rem",color:"#0369A1",marginBottom:4,fontWeight:500}}>
-                        🕐 שעת חלון · {b.startTime}–{b.endTime}
-                      </div>
-                      <div style={{display:"flex",gap:6,alignItems:"center",justifyContent:"space-between"}}>
-                        <button onClick={e=>{e.stopPropagation();
-                          setAddModal({dateStr, insertAfterIdx:-1, slotId: b.id, slotStartTime: b.startTime});
-                          setAddType("treatment");
-                          setPatientQ("");
-                        }} style={{
-                          flex:1,padding:"4px 8px",fontSize:"0.65rem",borderRadius:6,border:"none",
-                          background:"#0284C7",color:"white",cursor:"pointer",fontWeight:600
-                        }}>+ הוסף מטופל</button>
-                        <span onClick={() => removeBlock(dateStr, b.id)}
-                          style={{cursor:"pointer",fontSize:"0.7rem",color:"#C4724A",opacity:0.7}}>✕</span>
-                      </div>
-                    </div>
-                  ) : (
-                    <div style={{background:"repeating-linear-gradient(45deg,#f5f0e8,#f5f0e8 4px,#ede5d8 4px,#ede5d8 8px)",
-                      borderRadius:10,padding:"6px 10px",marginBottom:2,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                      <span style={{fontSize:"0.75rem",color:"var(--text-soft)"}}>☕ {b.startTime} ({b.minutes} דק&apos;)</span>
-                      <span onClick={() => removeBlock(dateStr, b.id)} style={{cursor:"pointer",fontSize:"0.7rem",color:"var(--terracotta)"}}>✕</span>
-                    </div>
-                  )}
                   <AddBtn onClick={() => { setAddModal({dateStr, insertAfterIdx:bi}); setAddType("treatment"); setPatientQ(""); }} />
                 </div>
               ))}
