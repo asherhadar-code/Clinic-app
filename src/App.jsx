@@ -2896,33 +2896,34 @@ function Calendar({ patients, appointments, setAppointments, openModal, sendWhat
                       style={{
                         background: b.status==="arrived"?"#E8F5E8":b.status==="cancelled"?"#FBE8E3":"var(--sage-light)",
                         border:`2px solid ${b.status==="arrived"?"#4CAF50":b.status==="cancelled"?"#C4724A":"var(--sage)"}`,
-                        borderRadius:10,padding:"8px 10px",marginBottom:2,position:"relative",
-                        display:"flex",alignItems:"center",justifyContent:"space-between",userSelect:"none"
+                        borderRadius:10,padding:"8px 10px",marginBottom:2,position:"relative",userSelect:"none"
                       }}>
-                      <div style={{flex:1,minWidth:0}}>
-                        <div style={{display:"inline-block",fontWeight:700,fontSize:"0.82rem",color:"var(--sage-dark)"}}>
-                          <span style={{cursor:"pointer",textDecoration:"underline dotted"}}
-                            onClick={e=>{e.stopPropagation();
-                              const pt=patients.find(p=>p.id===b.patientId||p.name===b.patientName);
-                              if(pt)onSelectPatient(pt);
-                            }}>{b.patientName}</span>
-                          {b.paid?" 👑":""}
-                        </div>
-                        <div style={{fontSize:"0.68rem",color:"var(--text-soft)",marginTop:1}}>{b.startTime}–{b.endTime}</div>
-                        <div style={{fontSize:"0.68rem",marginTop:1}}>
-                          <span style={{color:b.status==="arrived"?"#2E7D32":b.status==="cancelled"?"#C4724A":b.status==="confirmed"?"#4CAF50":"#FFA000"}}>
-                            {b.status==="arrived"?"✅ הגיע":b.status==="cancelled"?"❌ בוטל":b.status==="confirmed"?"✅ אישר":"⏳ ממתין"}
-                          </span>
-                        </div>
+                      {/* Row 1: name + badge */}
+                      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:5}}>
+                        <span style={{fontWeight:700,fontSize:"0.82rem",color:"var(--sage-dark)",cursor:"pointer",textDecoration:"underline dotted",
+                          whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",maxWidth:"75%"}}
+                          onClick={e=>{e.stopPropagation();
+                            const pt=patients.find(p=>p.id===b.patientId||p.name===b.patientName);
+                            if(pt)onSelectPatient(pt);
+                          }}>{b.patientName}{b.paid?" 👑":""}</span>
+                        {(() => {
+                          const sm = {arrived:{label:"הגיע",bg:"#DCFCE7",color:"#16A34A"},cancelled:{label:"בוטל",bg:"#FFE4E6",color:"#E11D48"},confirmed:{label:"אישר",bg:"#DCFCE7",color:"#16A34A"},pending:{label:"ממתין",bg:"#EEF2FF",color:"#6366F1"}};
+                          const s = sm[b.status]||sm.pending;
+                          return <span style={{background:s.bg,color:s.color,fontSize:"0.65rem",fontWeight:600,padding:"2px 6px",borderRadius:20,flexShrink:0}}>{s.label}</span>;
+                        })()}
                       </div>
-                      <div style={{display:"flex",alignItems:"center",gap:6,flexShrink:0}}>
-                        {b.status!=="pending" && (
-                          <button onClick={e=>{e.stopPropagation();updateStatus(b.id,"pending");}} title="אפס"
-                            style={{background:"rgba(0,0,0,0.06)",border:"none",borderRadius:6,cursor:"pointer",fontSize:"0.75rem",color:"#8E8E93",padding:"2px 6px"}}>↺</button>
-                        )}
-                        <button onClick={e=>{e.stopPropagation();setActivePopupBlock({b,dateStr});}} 
-                          style={{background:"rgba(0,0,0,0.06)",border:"none",borderRadius:6,cursor:"pointer",fontSize:"16px",color:"#555",padding:"2px 6px",fontWeight:700,lineHeight:1}}>⋯</button>
-                        <span onClick={()=>removeBlock(dateStr,b.id)} style={{cursor:"pointer",fontSize:"0.7rem",color:"var(--terracotta)",opacity:0.7}}>✕</span>
+                      {/* Row 2: time + actions */}
+                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                        <span style={{fontSize:"0.8rem",fontWeight:600,color:"#555"}}>{b.startTime}–{b.endTime}</span>
+                        <div style={{display:"flex",alignItems:"center",gap:5}}>
+                          {b.status!=="pending" && (
+                            <button onClick={e=>{e.stopPropagation();updateStatus(b.id,"pending");}} title="אפס"
+                              style={{background:"none",border:"none",cursor:"pointer",fontSize:"0.7rem",color:"#8E8E93",padding:0}}>↺</button>
+                          )}
+                          <span onClick={()=>removeBlock(dateStr,b.id)} style={{cursor:"pointer",fontSize:"0.7rem",color:"var(--terracotta)",opacity:0.5}}>✕</span>
+                          <button onClick={e=>{e.stopPropagation();setActivePopupBlock({b,dateStr});}}
+                            style={{background:"#E5E5EA",border:"none",borderRadius:8,color:"#555",fontSize:"14px",padding:"4px 9px",fontWeight:700,cursor:"pointer",lineHeight:1}}>⋯</button>
+                        </div>
                       </div>
                     </div>
                   ) : b.type === "slot" ? (
