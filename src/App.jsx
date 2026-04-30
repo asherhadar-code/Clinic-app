@@ -2918,12 +2918,12 @@ function Calendar({ patients, appointments, setAppointments, openModal, sendWhat
                         <div style={{display:"flex",alignItems:"center",gap:6}}>
                           {b.status!=="pending" && (
                             <button onClick={e=>{e.stopPropagation();updateStatus(b.id,"pending");}} title="אפס"
-                              style={{background:"#F5F5F5",border:"none",borderRadius:8,cursor:"pointer",fontSize:"1rem",color:"#8E8E93",padding:"4px 8px",fontWeight:600}}>↺</button>
+                              style={{background:"#F5F5F5",border:"none",borderRadius:8,cursor:"pointer",fontSize:"1rem",color:"#8E8E93",padding:"5px 12px",fontWeight:600}}>↺</button>
                           )}
                           <button onClick={e=>{e.stopPropagation();removeBlock(dateStr,b.id);}}
-                            style={{background:"#FFF1F2",border:"none",borderRadius:8,cursor:"pointer",fontSize:"0.85rem",color:"#C4724A",padding:"4px 8px",fontWeight:600}}>✕</button>
+                            style={{background:"#FFF1F2",border:"none",borderRadius:8,cursor:"pointer",fontSize:"0.85rem",color:"#C4724A",padding:"5px 12px",fontWeight:600}}>✕</button>
                           <button onClick={e=>{e.stopPropagation();setActivePopupBlock({b,dateStr});}}
-                            style={{background:"#E5E5EA",border:"none",borderRadius:8,color:"#555",fontSize:"1rem",padding:"4px 10px",fontWeight:700,cursor:"pointer",lineHeight:1}}>⋯</button>
+                            style={{background:"#E5E5EA",border:"none",borderRadius:8,color:"#555",fontSize:"1rem",padding:"5px 21px",fontWeight:700,cursor:"pointer",lineHeight:1}}>⋯</button>
                         </div>
                       </div>
                     </div>
