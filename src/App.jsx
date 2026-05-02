@@ -1043,6 +1043,22 @@ function AiLoading() {
 // ══════════════════════════════════════════════════════════════════
 export default function App() {
   const [page, setPage] = useState("dashboard");
+  const [pageHistory, setPageHistory] = useState([]);
+
+  const navigateTo = (newPage) => {
+    setPageHistory(prev => [...prev, page]);
+    setPage(newPage);
+  };
+
+  const goBack = () => {
+    if (pageHistory.length > 0) {
+      const prev = pageHistory[pageHistory.length - 1];
+      setPageHistory(h => h.slice(0, -1));
+      setPage(prev);
+    } else {
+      setPage("dashboard");
+    }
+  };
   const [patients, setPatients] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -1920,7 +1936,7 @@ ${styleExamples ? `להלן דוגמאות לסגנון הכתיבה של הקל
 
           {page === "dashboard" && <Dashboard patients={patients} appointments={appointments} unpaidAppointments={unpaidAppointments} openModal={openModal} sendWhatsApp={sendWhatsApp} setMarkPaidModal={setMarkPaidModal} />}
           {page === "calendar" && <Calendar patients={patients} appointments={appointments} setAppointments={setAppointments} openModal={openModal} sendWhatsApp={sendWhatsApp} settings={settings}
-            onSelectPatient={(p) => { setSelectedPatient(p); setPage("patient_detail"); }}
+            onSelectPatient={(p) => { setSelectedPatient(p); navigateTo("patient_detail"); }}
             onOpenPostSession={(p) => { setCurrentPatientForModal(p); setSessionNote(""); setModal("post_session"); }} />}
           {(page === "patients_list" || page === "patients" || page === "receipts" || page === "patients_archive") && (
             <div>
@@ -1943,7 +1959,7 @@ ${styleExamples ? `להלן דוגמאות לסגנון הכתיבה של הקל
                 ))}
               </div>
               {(page === "patients_list" || page === "patients") && !selectedPatient &&
-                <PatientList patients={patients.filter(p => !p.archived)} onSelect={p => { setSelectedPatient(p); setPage("patient_detail"); }}
+                <PatientList patients={patients.filter(p => !p.archived)} onSelect={p => { setSelectedPatient(p); navigateTo("patient_detail"); }}
                   onAdd={() => setPatientModal("add")} />}
               {/* receipts now inside patients section */}
               {page === "patients_archive" && <PatientsArchive patients={patients.filter(p => p.archived)} receiptsHistory={receiptsHistory} openAiChat={openAiChat} onRestore={(id) => {
@@ -1957,7 +1973,7 @@ ${styleExamples ? `להלן דוגמאות לסגנון הכתיבה של הקל
             </div>
           )}
           {page === "patient_detail" && selectedPatient &&
-            <PatientDetail patient={selectedPatient} onBack={() => { setSelectedPatient(null); setPage("patients_list"); }}
+            <PatientDetail patient={selectedPatient} onBack={goBack}
               openModal={openModal} generateReport={generateReport} aiText={aiText} aiLoading={aiLoading} openAiChat={openAiChat}
               documents={documents[selectedPatient.id] || []} addDocument={addDocument} removeDocument={removeDocument}
               onEdit={() => { setEditingPatient(selectedPatient); setPatientModal("edit"); }}
@@ -2888,11 +2904,6 @@ function Calendar({ patients, appointments, setAppointments, openModal, sendWhat
                   {b.type === "treatment" ? (
                     <div
                       onClick={e => e.stopPropagation()}
-                      onMouseDown={e => { e.currentTarget._pressTimer = setTimeout(() => { updateStatus(b.id,"pending"); }, 600); }}
-                      onMouseUp={e => clearTimeout(e.currentTarget._pressTimer)}
-                      onMouseLeave={e => clearTimeout(e.currentTarget._pressTimer)}
-                      onTouchStart={e => { e.currentTarget._pressTimer = setTimeout(() => { updateStatus(b.id,"pending"); }, 600); }}
-                      onTouchEnd={e => clearTimeout(e.currentTarget._pressTimer)}
                       style={{
                         background: b.status==="arrived"?"#E8F5E8":b.status==="cancelled"?"#FBE8E3":"var(--sage-light)",
                         border:`2px solid ${b.status==="arrived"?"#4CAF50":b.status==="cancelled"?"#C4724A":"var(--sage)"}`,
@@ -2974,18 +2985,40 @@ function Calendar({ patients, appointments, setAppointments, openModal, sendWhat
                   <div style={{fontSize:"0.75rem",color:"#C4C4C6",textAlign:"center",padding:"4px 0"}}>יום ריק</div>
                 ) : (
                   <div style={{display:"flex",flexDirection:"column",gap:3}}>
-                    {dayItems.map(b => (
-                      <div key={b.id} onClick={()=>{setCurrentDayIdx(date.getDay());setCalView("day");setTimeout(()=>setActivePopupBlock({b,dateStr}),100);}}
-                        style={{display:"flex",alignItems:"center",gap:8,padding:"4px 6px",borderRadius:6,cursor:"pointer",
-                          background:b.status==="arrived"?"#E8F5E8":b.status==="cancelled"?"#FBE8E3":b.status==="confirmed"?"#F0FDF4":"#EEF2FF"}}>
-                        <div style={{width:8,height:8,borderRadius:"50%",background:statusColors[b.status]||"#6366F1",flexShrink:0}}/>
-                        <span style={{fontSize:"0.8rem",fontWeight:600,color:"var(--text)",flex:1}}>{b.patientName}</span>
-                        <span style={{fontSize:"0.7rem",color:"var(--text-soft)"}}>{b.startTime}</span>
-                        <span style={{fontSize:"0.7rem",fontWeight:600,color:statusColors[b.status]||"#6366F1"}}>
-                          {b.status==="arrived"?"הגיע":b.status==="cancelled"?"בוטל":b.status==="confirmed"?"אישר":"ממתין"}
-                        </span>
-                      </div>
-                    ))}
+                    {dayItems.map(b => {
+                      // בדיקת תיעוד — יש סיכום טיפול לתאריך זה
+                      const patient = patients.find(p=>p.id===b.patientId||p.name===b.patientName);
+                      const aptDate = new Date(dateStr);
+                      const hasDoc = patient?.history?.some(h => {
+                        const sessionDate = h.date ? (() => {
+                          const parts = h.date.split("/");
+                          return parts.length===3 ? new Date(parts[2],parts[1]-1,parts[0]) : new Date(h.date);
+                        })() : null;
+                        return sessionDate && Math.abs(sessionDate - aptDate) < 2*24*60*60*1000;
+                      });
+                      // בדיקת חשבונית — paid=true על הפגישה
+                      const hasReceipt = b.paid === true;
+
+                      return (
+                        <div key={b.id} onClick={()=>{setCurrentDayIdx(date.getDay());setCalView("day");setTimeout(()=>setActivePopupBlock({b,dateStr}),100);}}
+                          style={{display:"flex",alignItems:"center",gap:8,padding:"4px 6px",borderRadius:6,cursor:"pointer",
+                            background:b.status==="arrived"?"#E8F5E8":b.status==="cancelled"?"#FBE8E3":b.status==="confirmed"?"#F0FDF4":"#EEF2FF"}}>
+                          <div style={{width:8,height:8,borderRadius:"50%",background:statusColors[b.status]||"#6366F1",flexShrink:0}}/>
+                          <span style={{fontSize:"0.8rem",fontWeight:600,color:"var(--text)",flex:1}}>{b.patientName}</span>
+                          <span style={{fontSize:"0.7rem",color:"var(--text-soft)"}}>{b.startTime}</span>
+                          <span style={{fontSize:"0.7rem",fontWeight:600,color:statusColors[b.status]||"#6366F1"}}>
+                            {b.status==="arrived"?"הגיע":b.status==="cancelled"?"בוטל":b.status==="confirmed"?"אישר":"ממתין"}
+                          </span>
+                          {/* אינדיקציית תיעוד */}
+                          <div style={{position:"relative",flexShrink:0}}>
+                            <span style={{fontSize:"0.85rem",opacity:hasDoc?1:0.25}}>✍️</span>
+                            {hasDoc && <span style={{position:"absolute",top:-4,right:-4,background:"#16A34A",color:"white",borderRadius:"50%",width:10,height:10,fontSize:"0.45rem",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:700}}>✓</span>}
+                          </div>
+                          {/* אינדיקציית חשבונית */}
+                          <span style={{fontSize:"0.85rem",opacity:hasReceipt?1:0.25,flexShrink:0}}>💳</span>
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </div>
