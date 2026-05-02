@@ -2990,11 +2990,20 @@ function Calendar({ patients, appointments, setAppointments, openModal, sendWhat
                       const patient = patients.find(p=>p.id===b.patientId||p.name===b.patientName);
                       const aptDate = new Date(dateStr);
                       const hasDoc = patient?.history?.some(h => {
-                        const sessionDate = h.date ? (() => {
+                        if (!h.date) return false;
+                        // תאריך נשמר בפורמט עברי: D.M.YYYY או DD/MM/YYYY
+                        let sessionDate = null;
+                        if (h.date.includes(".")) {
+                          const parts = h.date.split(".");
+                          if (parts.length === 3) sessionDate = new Date(parts[2], parts[1]-1, parts[0]);
+                        } else if (h.date.includes("/")) {
                           const parts = h.date.split("/");
-                          return parts.length===3 ? new Date(parts[2],parts[1]-1,parts[0]) : new Date(h.date);
-                        })() : null;
-                        return sessionDate && Math.abs(sessionDate - aptDate) < 2*24*60*60*1000;
+                          if (parts.length === 3) sessionDate = new Date(parts[2], parts[1]-1, parts[0]);
+                        } else {
+                          sessionDate = new Date(h.date);
+                        }
+                        if (!sessionDate) return false;
+                        return Math.abs(sessionDate - aptDate) < 2*24*60*60*1000;
                       });
                       // בדיקת חשבונית — paid=true על הפגישה
                       const hasReceipt = b.paid === true;
