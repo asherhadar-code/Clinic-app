@@ -2771,6 +2771,13 @@ function Calendar({ patients, appointments, setAppointments, openModal, sendWhat
         }
       }
       setAppointments(prev => [...prev, ...newApts]);
+      if (showNotification) {
+        if (isRecurring) {
+          showNotification(`✅ ${patient.name} נוסף לסדרה של ${recurringWeeks} שבועות`);
+        } else {
+          showNotification(`✅ ${patient.name} נוסף ליומן בהצלחה`);
+        }
+      }
     } catch(e) { console.error(e); }
     setAddModal(null);
     setPatientQ("");
