@@ -54,14 +54,13 @@ export default async function handler(req, res) {
 
     // Step 4: Payment type map
     const paymentTypeMap = {
-      "ביט": 4,
-      "פייבוקס": 4,
-      "העברה בנקאית": 3,
       "מזומן": 1,
+      "שיק": 2,
+      "כרטיס אשראי": 3,
+      "העברה בנקאית": 4,
+      "ביט": 5,
+      "פייבוקס": 5,
     };
-
-    const fullAmount = parseFloat(amount);
-    const priceBeforeVat = Math.round((fullAmount / 1.18) * 100) / 100;
 
     // Step 5: Create receipt
     const receiptRes = await fetch("https://api.greeninvoice.co.il/api/v1/documents", {
@@ -75,7 +74,7 @@ export default async function handler(req, res) {
         type: 320,
         lang: "he",
         currency: "ILS",
-        vatType: 0,
+        vatType: 1,
         discount: 0,
         rounding: false,
         signed: true,
@@ -85,15 +84,15 @@ export default async function handler(req, res) {
           {
             description: description || "טיפול קלינאות תקשורת",
             quantity: 1,
-            price: priceBeforeVat,
+            price: parseFloat(amount),
             currency: "ILS",
-            vatType: 0,
+            vatType: 1,
           },
         ],
         payment: [
           {
             type: paymentTypeMap[paymentMethod] || 1,
-            price: fullAmount,
+            price: parseFloat(amount),
             currency: "ILS",
             date: new Date().toISOString().split("T")[0],
           },
@@ -102,7 +101,6 @@ export default async function handler(req, res) {
     });
 
     const receiptData = await receiptRes.json();
-    console.log("GI Response:", JSON.stringify(receiptData));
     if (receiptData.errorMessage) throw new Error(receiptData.errorMessage);
 
     return res.status(200).json({
