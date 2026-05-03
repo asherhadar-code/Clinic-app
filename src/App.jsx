@@ -2644,7 +2644,8 @@ function Calendar({ patients, appointments, setAppointments, openModal, sendWhat
   const makeId = () => Math.random().toString(36).slice(2,8);
   const [calView, setCalView] = useState("day"); // "day" | "week"
   const [currentDayIdx, setCurrentDayIdx] = useState(new Date().getDay());
-  const [activePopupBlock, setActivePopupBlock] = useState(null); // { b, dateStr }
+  const [activePopupBlock, setActivePopupBlock] = useState(null);
+  const [weekActionPopup, setWeekActionPopup] = useState(null); // { b, dateStr, patient } // { b, dateStr }
 
   // Week navigation
   const [weekOffset, setWeekOffset] = useState(0);
@@ -3009,7 +3010,10 @@ function Calendar({ patients, appointments, setAppointments, openModal, sendWhat
                       const hasReceipt = b.paid === true;
 
                       return (
-                        <div key={b.id} onClick={()=>{setCurrentDayIdx(date.getDay());setCalView("day");setTimeout(()=>setActivePopupBlock({b,dateStr}),100);}}
+                        <div key={b.id} onClick={()=>{
+                          const pt = patients.find(p=>p.id===b.patientId||p.name===b.patientName);
+                          setWeekActionPopup({b, dateStr, patient: pt});
+                        }}
                           style={{display:"flex",alignItems:"center",gap:8,padding:"4px 6px",borderRadius:6,cursor:"pointer",
                             background:b.status==="arrived"?"#E8F5E8":b.status==="cancelled"?"#FBE8E3":b.status==="confirmed"?"#F0FDF4":"#EEF2FF"}}>
                           <div style={{width:8,height:8,borderRadius:"50%",background:statusColors[b.status]||"#6366F1",flexShrink:0}}/>
@@ -3076,6 +3080,43 @@ function Calendar({ patients, appointments, setAppointments, openModal, sendWhat
                 if(pt)onOpenPostSession(pt);
                 setActivePopupBlock(null);
               }} style={{padding:"10px",fontSize:"0.85rem",borderRadius:12,border:"none",background:"#6366F1",color:"white",cursor:"pointer",fontWeight:600,fontFamily:"inherit"}}>📝 תיעוד</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Week action popup */}
+      {weekActionPopup && (
+        <div className="modal-overlay" onClick={()=>setWeekActionPopup(null)}>
+          <div className="modal" style={{width:320}} onClick={e=>e.stopPropagation()}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+              <div>
+                <div style={{fontWeight:700,fontSize:"0.95rem",color:"var(--text)"}}>{weekActionPopup.b.patientName}</div>
+                <div style={{fontSize:"0.78rem",color:"var(--text-soft)",marginTop:2}}>
+                  {new Date(weekActionPopup.dateStr).toLocaleDateString("he-IL",{weekday:"long",day:"numeric",month:"long"})} · {weekActionPopup.b.startTime}
+                </div>
+              </div>
+              <button onClick={()=>setWeekActionPopup(null)} style={{background:"#F5F5F5",border:"none",borderRadius:"50%",width:26,height:26,cursor:"pointer",fontSize:13}}>✕</button>
+            </div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+              <button onClick={()=>{
+                if(weekActionPopup.patient) onOpenPostSession(weekActionPopup.patient);
+                setWeekActionPopup(null);
+              }} style={{padding:"14px 10px",fontSize:"0.9rem",borderRadius:14,border:"none",
+                background:"#6366F1",color:"white",cursor:"pointer",fontWeight:600,fontFamily:"inherit",
+                display:"flex",flexDirection:"column",alignItems:"center",gap:6}}>
+                <span style={{fontSize:"1.5rem"}}>📝</span>
+                תיעוד
+              </button>
+              <button onClick={()=>{
+                if(weekActionPopup.patient) openModal("receipt", weekActionPopup.patient);
+                setWeekActionPopup(null);
+              }} style={{padding:"14px 10px",fontSize:"0.9rem",borderRadius:14,border:"none",
+                background:"#F0FDF4",color:"#16A34A",cursor:"pointer",fontWeight:600,fontFamily:"inherit",
+                border:"2px solid #86EFAC",display:"flex",flexDirection:"column",alignItems:"center",gap:6}}>
+                <span style={{fontSize:"1.5rem"}}>🧾</span>
+                הפק חשבונית
+              </button>
             </div>
           </div>
         </div>
