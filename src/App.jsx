@@ -2644,7 +2644,7 @@ function Calendar({ patients, appointments, setAppointments, openModal, sendWhat
   const makeId = () => Math.random().toString(36).slice(2,8);
   const [calView, setCalView] = useState("day"); // "day" | "week"
   const [currentDayIdx, setCurrentDayIdx] = useState(new Date().getDay());
-  const [activePopupBlock, setActivePopupBlock] = useState(null);
+  const [deleteConfirm, setDeleteConfirm] = useState(null); // { dateStr, blockId, patientName, dateLabel, patientId, dayIndex }
   const [weekActionPopup, setWeekActionPopup] = useState(null); // { b, dateStr, patient } // { b, dateStr }
 
   // Week navigation
@@ -2932,7 +2932,11 @@ function Calendar({ patients, appointments, setAppointments, openModal, sendWhat
                             <button onClick={e=>{e.stopPropagation();updateStatus(b.id,"pending");}} title="אפס"
                               style={{background:"#F5F5F5",border:"none",borderRadius:8,cursor:"pointer",fontSize:"1rem",color:"#8E8E93",padding:"5px 12px",fontWeight:600}}>↺</button>
                           )}
-                          <button onClick={e=>{e.stopPropagation();removeBlock(dateStr,b.id);}}
+                          <button onClick={e=>{e.stopPropagation();
+                            const d = new Date(dateStr);
+                            const dateLabel = d.toLocaleDateString("he-IL",{day:"numeric",month:"numeric",year:"numeric"});
+                            setDeleteConfirm({dateStr, blockId:b.id, patientName:b.patientName, dateLabel, patientId:b.patientId, dayIndex:d.getDay()});
+                          }}
                             style={{background:"#FFF1F2",border:"none",borderRadius:8,cursor:"pointer",fontSize:"0.85rem",color:"#C4724A",padding:"5px 12px",fontWeight:600}}>✕</button>
                           <button onClick={e=>{e.stopPropagation();setActivePopupBlock({b,dateStr});}}
                             style={{background:"#E5E5EA",border:"none",borderRadius:8,color:"#555",fontSize:"1rem",padding:"5px 21px",fontWeight:700,cursor:"pointer",lineHeight:1}}>⋯</button>
@@ -3116,6 +3120,52 @@ function Calendar({ patients, appointments, setAppointments, openModal, sendWhat
                 border:"2px solid #86EFAC",display:"flex",flexDirection:"column",alignItems:"center",gap:6}}>
                 <span style={{fontSize:"1.5rem"}}>🧾</span>
                 הפק חשבונית
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete confirmation modal */}
+      {deleteConfirm && (
+        <div className="modal-overlay" onClick={()=>setDeleteConfirm(null)}>
+          <div className="modal" style={{width:300}} onClick={e=>e.stopPropagation()}>
+            <div style={{textAlign:"center",marginBottom:14}}>
+              <div style={{width:54,height:54,borderRadius:"50%",background:"#FFF1F2",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto",fontSize:24}}>🗓️</div>
+            </div>
+            <div style={{textAlign:"center",marginBottom:6}}>
+              <div style={{fontWeight:700,fontSize:"1rem",color:"var(--text)"}}>מחיקת תור</div>
+              <div style={{fontSize:"0.8rem",color:"var(--text-soft)",marginTop:4}}>{deleteConfirm.patientName} · {deleteConfirm.dateLabel}</div>
+            </div>
+            <div style={{height:1,background:"#F2F2F7",margin:"14px 0"}}/>
+            <div style={{display:"flex",flexDirection:"column",gap:8}}>
+              <button onClick={async()=>{
+                await removeBlock(deleteConfirm.dateStr, deleteConfirm.blockId);
+                showNotification("✅ התור בוטל בהצלחה");
+                setDeleteConfirm(null);
+              }} style={{padding:"13px 16px",borderRadius:12,border:"1.5px solid #E0E7FF",background:"white",cursor:"pointer",textAlign:"right",fontFamily:"inherit"}}>
+                <div style={{fontWeight:600,fontSize:"0.88rem",color:"#6366F1"}}>מחק תור זה בלבד</div>
+                <div style={{fontSize:"0.75rem",color:"var(--text-soft)",marginTop:2}}>יבוטל רק התור של {deleteConfirm.dateLabel}</div>
+              </button>
+              <button onClick={async()=>{
+                // מחק כל הפגישות הבאות של אותו מטופל באותו יום בשבוע
+                const toDelete = appointments.filter(a =>
+                  (a.patient_id===deleteConfirm.patientId || a.patient_name===deleteConfirm.patientName) &&
+                  a.day_index===deleteConfirm.dayIndex &&
+                  a.date >= deleteConfirm.dateStr
+                );
+                for (const a of toDelete) {
+                  await removeBlock(a.date, a.id).catch(()=>{});
+                }
+                showNotification(`✅ ${toDelete.length} תורים בוטלו בהצלחה`);
+                setDeleteConfirm(null);
+              }} style={{padding:"13px 16px",borderRadius:12,border:"1.5px solid #FFE4E6",background:"white",cursor:"pointer",textAlign:"right",fontFamily:"inherit"}}>
+                <div style={{fontWeight:600,fontSize:"0.88rem",color:"#E11D48"}}>מחק את כל הסדרה</div>
+                <div style={{fontSize:"0.75rem",color:"var(--text-soft)",marginTop:2}}>יבוטלו כל התורים הבאים מ-{deleteConfirm.dateLabel}</div>
+              </button>
+              <button onClick={()=>setDeleteConfirm(null)}
+                style={{padding:"11px",borderRadius:12,border:"none",background:"#F5F5F5",cursor:"pointer",fontSize:"0.85rem",color:"#8E8E93",fontFamily:"inherit",fontWeight:500}}>
+                ביטול
               </button>
             </div>
           </div>
