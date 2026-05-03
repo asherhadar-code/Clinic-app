@@ -1935,7 +1935,7 @@ ${styleExamples ? `להלן דוגמאות לסגנון הכתיבה של הקל
           )}
 
           {page === "dashboard" && <Dashboard patients={patients} appointments={appointments} unpaidAppointments={unpaidAppointments} openModal={openModal} sendWhatsApp={sendWhatsApp} setMarkPaidModal={setMarkPaidModal} />}
-          {page === "calendar" && <Calendar patients={patients} appointments={appointments} setAppointments={setAppointments} openModal={openModal} sendWhatsApp={sendWhatsApp} settings={settings}
+          {page === "calendar" && <Calendar patients={patients} appointments={appointments} setAppointments={setAppointments} openModal={openModal} sendWhatsApp={sendWhatsApp} settings={settings} showNotification={showNotification}
             onSelectPatient={(p) => { setSelectedPatient(p); navigateTo("patient_detail"); }}
             onOpenPostSession={(p) => { setCurrentPatientForModal(p); setSessionNote(""); setModal("post_session"); }} />}
           {(page === "patients_list" || page === "patients" || page === "receipts" || page === "patients_archive") && (
@@ -2639,7 +2639,7 @@ function useHebrewCalendar(weekDates) {
   return { holidays, getHebrewDate };
 }
 
-function Calendar({ patients, appointments, setAppointments, openModal, sendWhatsApp, settings, onSelectPatient, onOpenPostSession }) {
+function Calendar({ patients, appointments, setAppointments, openModal, sendWhatsApp, settings, onSelectPatient, onOpenPostSession, showNotification }) {
   const [dayStart, setDayStart] = useState("08:30");
   const makeId = () => Math.random().toString(36).slice(2,8);
   const [calView, setCalView] = useState("day"); // "day" | "week"
@@ -2719,6 +2719,7 @@ function Calendar({ patients, appointments, setAppointments, openModal, sendWhat
   const [patientQ, setPatientQ] = useState("");
   const [isRecurring, setIsRecurring] = useState(false);
   const [recurringWeeks, setRecurringWeeks] = useState(8);
+  const [selectedPatientForAdd, setSelectedPatientForAdd] = useState(null);
 
   const assignPatientToModal = async (patient) => {
     try {
@@ -3142,7 +3143,7 @@ function Calendar({ patients, appointments, setAppointments, openModal, sendWhat
             <div style={{display:"flex",flexDirection:"column",gap:8}}>
               <button onClick={async()=>{
                 await removeBlock(deleteConfirm.dateStr, deleteConfirm.blockId);
-                showNotification("✅ התור בוטל בהצלחה");
+                showNotification && showNotification("✅ התור בוטל בהצלחה");
                 setDeleteConfirm(null);
               }} style={{padding:"13px 16px",borderRadius:12,border:"1.5px solid #E0E7FF",background:"white",cursor:"pointer",textAlign:"right",fontFamily:"inherit"}}>
                 <div style={{fontWeight:600,fontSize:"0.88rem",color:"#6366F1"}}>מחק תור זה בלבד</div>
@@ -3161,7 +3162,7 @@ function Calendar({ patients, appointments, setAppointments, openModal, sendWhat
                 setAppointments(prev => prev.filter(a => 
                   !toDelete.some(d => d.id === a.id)
                 ));
-                showNotification(`✅ ${toDelete.length} תורים בוטלו בהצלחה`);
+                showNotification && showNotification(`✅ ${toDelete.length} תורים בוטלו בהצלחה`);
               }} style={{padding:"13px 16px",borderRadius:12,border:"1.5px solid #FFE4E6",background:"white",cursor:"pointer",textAlign:"right",fontFamily:"inherit"}}>
                 <div style={{fontWeight:600,fontSize:"0.88rem",color:"#E11D48"}}>מחק את כל הסדרה</div>
                 <div style={{fontSize:"0.75rem",color:"var(--text-soft)",marginTop:2}}>יבוטלו כל התורים הבאים מ-{deleteConfirm.dateLabel}</div>
@@ -3221,11 +3222,13 @@ function Calendar({ patients, appointments, setAppointments, openModal, sendWhat
                   onChange={e => setPatientQ(e.target.value)} style={{marginBottom:10}} />
                 <div style={{maxHeight:160,overflowY:"auto",marginBottom:12}}>
                   {filteredPatients.map(p => (
-                    <div key={p.id} className="picker-item" onClick={() => assignPatientToModal(p)}
+                    <div key={p.id} className="picker-item" onClick={() => setSelectedPatientForAdd(p)}
                       style={{padding:"8px 12px",borderRadius:10,cursor:"pointer",marginBottom:4,
-                        background:"var(--cream)",transition:"background 0.15s"}}
-                      onMouseEnter={e=>e.currentTarget.style.background="var(--warm)"}
-                      onMouseLeave={e=>e.currentTarget.style.background="var(--cream)"}>
+                        background:selectedPatientForAdd?.id===p.id?"#EEF2FF":"var(--cream)",
+                        border:selectedPatientForAdd?.id===p.id?"1.5px solid #6366F1":"1.5px solid transparent",
+                        transition:"background 0.15s"}}
+                      onMouseEnter={e=>e.currentTarget.style.background=selectedPatientForAdd?.id===p.id?"#EEF2FF":"var(--warm)"}
+                      onMouseLeave={e=>e.currentTarget.style.background=selectedPatientForAdd?.id===p.id?"#EEF2FF":"var(--cream)"}>
                       <div style={{fontWeight:500}}>{p.name}</div>
                       <div style={{fontSize:"0.75rem",color:"var(--text-soft)"}}>{p.diagnosis}</div>
                     </div>
@@ -3260,6 +3263,12 @@ function Calendar({ patients, appointments, setAppointments, openModal, sendWhat
                         ))}
                       </div>
                     </div>
+                  )}
+                  {selectedPatientForAdd && (
+                    <button className="btn btn-primary" style={{marginTop:12,width:"100%"}}
+                      onClick={() => { assignPatientToModal(selectedPatientForAdd); setSelectedPatientForAdd(null); }}>
+                      ➕ הוסף {isRecurring ? `סדרה של ${recurringWeeks} שבועות` : "טיפול חד פעמי"} — {selectedPatientForAdd.name}
+                    </button>
                   )}
                 </div>
               </div>
