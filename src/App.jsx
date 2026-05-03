@@ -3149,17 +3149,19 @@ function Calendar({ patients, appointments, setAppointments, openModal, sendWhat
                 <div style={{fontSize:"0.75rem",color:"var(--text-soft)",marginTop:2}}>יבוטל רק התור של {deleteConfirm.dateLabel}</div>
               </button>
               <button onClick={async()=>{
-                // מחק כל הפגישות הבאות של אותו מטופל באותו יום בשבוע
                 const toDelete = appointments.filter(a =>
                   (a.patient_id===deleteConfirm.patientId || a.patient_name===deleteConfirm.patientName) &&
                   a.day_index===deleteConfirm.dayIndex &&
                   a.date >= deleteConfirm.dateStr
                 );
-                for (const a of toDelete) {
-                  await removeBlock(a.date, a.id).catch(()=>{});
-                }
-                showNotification(`✅ ${toDelete.length} תורים בוטלו בהצלחה`);
                 setDeleteConfirm(null);
+                for (const a of toDelete) {
+                  await sb.deleteAppointment(a.id).catch(()=>{});
+                }
+                setAppointments(prev => prev.filter(a => 
+                  !toDelete.some(d => d.id === a.id)
+                ));
+                showNotification(`✅ ${toDelete.length} תורים בוטלו בהצלחה`);
               }} style={{padding:"13px 16px",borderRadius:12,border:"1.5px solid #FFE4E6",background:"white",cursor:"pointer",textAlign:"right",fontFamily:"inherit"}}>
                 <div style={{fontWeight:600,fontSize:"0.88rem",color:"#E11D48"}}>מחק את כל הסדרה</div>
                 <div style={{fontSize:"0.75rem",color:"var(--text-soft)",marginTop:2}}>יבוטלו כל התורים הבאים מ-{deleteConfirm.dateLabel}</div>
