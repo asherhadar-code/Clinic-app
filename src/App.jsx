@@ -2644,8 +2644,9 @@ function Calendar({ patients, appointments, setAppointments, openModal, sendWhat
   const makeId = () => Math.random().toString(36).slice(2,8);
   const [calView, setCalView] = useState("day"); // "day" | "week"
   const [currentDayIdx, setCurrentDayIdx] = useState(new Date().getDay());
-  const [deleteConfirm, setDeleteConfirm] = useState(null); // { dateStr, blockId, patientName, dateLabel, patientId, dayIndex }
-  const [weekActionPopup, setWeekActionPopup] = useState(null); // { b, dateStr, patient } // { b, dateStr }
+  const [deleteConfirm, setDeleteConfirm] = useState(null);
+  const [weekActionPopup, setWeekActionPopup] = useState(null);
+  const [activePopupBlock, setActivePopupBlock] = useState(null);
 
   // Week navigation
   const [weekOffset, setWeekOffset] = useState(0);
