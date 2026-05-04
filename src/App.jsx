@@ -410,13 +410,7 @@ h1,h2,h3,h4 {
     z-index: 200;
     order: 2;
   }
-  .sidebar-logo {
-  padding: 0;
-  margin: 0;
-  border-bottom: 1px solid rgba(255,255,255,0.1);
-  overflow: hidden;
-  width: 100%;
-}display: none; }
+  .sidebar-logo { display: none; }
   .nav-item {
     flex-direction: column; gap: 2px;
     padding: 6px 4px;
@@ -1161,8 +1155,19 @@ export default function App() {
         boxShadow:"0 20px 60px rgba(99,102,241,0.15)"
       }}>
         <div style={{textAlign:"center",marginBottom:"1.5rem"}}>
-          <img src="/CLILOGO.PNG" alt="ClinicUp" style={{width:200,marginBottom:8}} />
-          <div style={{fontSize:"0.8rem",color:"var(--text-soft)",marginTop:4}}>מערכת ניהול קליניקה</div>
+          <div style={{
+            background:"linear-gradient(135deg,#3730A3,#4F46E5)",
+            borderRadius:16,padding:"18px 24px",marginBottom:8,
+            display:"flex",flexDirection:"column",alignItems:"center"
+          }}>
+            <div style={{fontFamily:"'DM Sans',sans-serif",fontSize:"2.2rem",fontWeight:800,letterSpacing:"-1.5px",lineHeight:1}}>
+              <span style={{color:"white"}}>Clinic</span>
+              <span style={{color:"#67E8F9"}}>Up</span>
+            </div>
+            <div style={{fontSize:"0.7rem",color:"rgba(255,255,255,0.55)",letterSpacing:"2px",textTransform:"uppercase",marginTop:5}}>
+              clinic management
+            </div>
+          </div>
         </div>
 
         <div style={{display:"flex",gap:4,background:"#F5F5F5",borderRadius:12,padding:3,marginBottom:"1.2rem"}}>
