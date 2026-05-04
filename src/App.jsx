@@ -2359,8 +2359,19 @@ function Sidebar({ page, setPage, leadsCount, openPatientsDrawer, onLogout }) {
 
   return (
     <aside className="sidebar">
-      <div className="sidebar-logo">
-        <img src="/CLILOGO.PNG" alt="ClinicUp" style={{width:"100%",height:"130px",objectFit:"cover",objectPosition:"center",display:"block"}} />
+      <div className="sidebar-logo" style={{
+        background:"linear-gradient(135deg,#3730A3,#4F46E5)",
+        padding:"16px 14px",
+        display:"flex",flexDirection:"column",alignItems:"flex-start",justifyContent:"center"
+      }}>
+        <div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:"1.6rem",fontWeight:800,letterSpacing:"-1px",lineHeight:1}}>
+          <span style={{color:"white"}}>Clinic</span>
+          <span style={{color:"#67E8F9"}}>Up</span>
+        </div>
+        <div style={{display:"flex",alignItems:"center",gap:5,marginTop:5}}>
+          <span style={{fontSize:"0.75rem"}}>📅</span>
+          <span style={{fontSize:"0.68rem",color:"rgba(255,255,255,0.6)",letterSpacing:"1px"}}>clinic management</span>
+        </div>
       </div>
       {nav.map(n => (
         <div key={n.id}>
