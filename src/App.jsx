@@ -1152,8 +1152,7 @@ export default function App() {
         boxShadow:"0 20px 60px rgba(99,102,241,0.15)"
       }}>
         <div style={{textAlign:"center",marginBottom:"1.5rem"}}>
-          <div style={{fontSize:"2.5rem",marginBottom:8}}>🏥</div>
-          <div style={{fontSize:"1.4rem",fontWeight:700,color:"#6366F1"}}>ClinicUp</div>
+          <img src="/CLILOGO.PNG" alt="ClinicUp" style={{width:200,marginBottom:8}} />
           <div style={{fontSize:"0.8rem",color:"var(--text-soft)",marginTop:4}}>מערכת ניהול קליניקה</div>
         </div>
 
@@ -2353,8 +2352,7 @@ function Sidebar({ page, setPage, leadsCount, openPatientsDrawer, onLogout }) {
   return (
     <aside className="sidebar">
       <div className="sidebar-logo">
-        <h2>ClinicUp</h2>
-        <p>CLINIC MANAGEMENT</p>
+        <img src="/CLILOGO.PNG" alt="ClinicUp" style={{width:"100%",maxWidth:150}} />
       </div>
       {nav.map(n => (
         <div key={n.id}>
