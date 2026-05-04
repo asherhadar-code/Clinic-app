@@ -338,14 +338,16 @@ h1,h2,h3,h4 {
   color: white;
   display: flex;
   flex-direction: column;
-  padding: 28px 0;
+  padding: 0;
   flex-shrink: 0;
   box-shadow: 1px 0 0 rgba(255,255,255,0.06);
 }
 .sidebar-logo {
-  padding: 0 20px 24px;
+  padding: 0;
+  margin: 0 0 12px 0;
   border-bottom: 1px solid rgba(255,255,255,0.06);
-  margin-bottom: 12px;
+  overflow: hidden;
+  width: 100%;
 }
 .sidebar-logo h2 { 
   font-size: 1.5rem; 
@@ -2358,7 +2360,7 @@ function Sidebar({ page, setPage, leadsCount, openPatientsDrawer, onLogout }) {
   return (
     <aside className="sidebar">
       <div className="sidebar-logo">
-        <img src="/CLILOGO.PNG" alt="ClinicUp" style={{width:"100%",height:"110px",objectFit:"cover",objectPosition:"center",display:"block"}} />
+        <img src="/CLILOGO.PNG" alt="ClinicUp" style={{width:"100%",height:"130px",objectFit:"cover",objectPosition:"center",display:"block"}} />
       </div>
       {nav.map(n => (
         <div key={n.id}>
