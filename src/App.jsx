@@ -406,7 +406,7 @@ h1,h2,h3,h4 {
     padding: 0;
     justify-content: space-around;
     align-items: center;
-    position: fixed; bottom: 0; right: 0;
+    position: fixed; bottom: 0; right: 0; left: 0;
     z-index: 200;
     order: 2;
   }
