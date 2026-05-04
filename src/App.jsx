@@ -409,8 +409,9 @@ h1,h2,h3,h4 {
     position: fixed; bottom: 0; right: 0; left: 0;
     z-index: 200;
     order: 2;
+    overflow: hidden;
   }
-  .sidebar-logo { display: none; }
+  .sidebar-logo { display: none !important; }
   .nav-item {
     flex-direction: column; gap: 2px;
     padding: 6px 4px;
