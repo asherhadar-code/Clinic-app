@@ -367,26 +367,27 @@ h1,h2,h3,h4 {
 
 .nav-item {
   display: flex; align-items: center; gap: 12px;
-  padding: 10px 14px;
+  padding: 11px 16px;
   cursor: pointer;
-  font-size: 0.85rem;
+  font-size: 0.95rem;
+  font-family: 'DM Sans', sans-serif;
   transition: all 0.18s;
   border-radius: 12px;
-  margin: 1px 10px;
-  color: rgba(255,255,255,0.55);
-  font-weight: 400;
-  letter-spacing: -0.1px;
+  margin: 2px 10px;
+  color: rgba(255,255,255,0.6);
+  font-weight: 500;
+  letter-spacing: -0.2px;
 }
 .nav-item:hover { 
   background: rgba(255,255,255,0.07);
-  color: rgba(255,255,255,0.9);
+  color: rgba(255,255,255,0.95);
 }
 .nav-item.active {
   background: rgba(99,102,241,0.25);
   color: white;
-  font-weight: 600;
+  font-weight: 700;
 }
-.nav-icon { font-size: 1.05rem; width: 20px; text-align: center; }
+.nav-icon { font-size: 1.15rem; width: 22px; text-align: center; }
 
 /* ── Main ── */
 .main {
@@ -2343,34 +2344,44 @@ function Sidebar({ page, setPage, leadsCount, openPatientsDrawer, onLogout }) {
   const patientsSubPages = ["patients_list","receipts","patients_archive"];
   const isPatientsSection = patientsSubPages.includes(page) || page === "patients" || page === "patient_detail";
 
+  const navIcons = {
+    dashboard: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#818CF8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>,
+    calendar:  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#38BDF8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>,
+    patients:  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#34D399" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>,
+    leads:     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#FB923C" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>,
+    finance:   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#A78BFA" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>,
+    documents_bank: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#F472B6" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>,
+    settings:  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#94A3B8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>,
+    logout:    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#94A3B8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>,
+  };
+
   const nav = [
-    { id:"dashboard",       icon:"🏠", label:"ראשי" },
-    { id:"calendar",        icon:"📅", label:"יומן" },
-    { id:"patients",        icon:"👥", label:"ניהול הקליניקה", sub:[
-      { id:"patients_list",     icon:"👥", label:"מטופלים" },
-      { id:"receipts",          icon:"🧾", label:"חשבוניות" },
-      { id:"patients_archive",  icon:"📦", label:"ארכיון" },
+    { id:"dashboard",       label:"ראשי" },
+    { id:"calendar",        label:"יומן" },
+    { id:"patients",        label:"ניהול הקליניקה", sub:[
+      { id:"patients_list",     label:"מטופלים" },
+      { id:"receipts",          label:"חשבוניות" },
+      { id:"patients_archive",  label:"ארכיון" },
     ]},
-    { id:"leads",           icon:"⏳", label:"המתנה" },
-    { id:"finance",         icon:"📊", label:"כספים" },
-    { id:"documents_bank",  icon:"📚", label:"מסמכים" },
-    { id:"settings",        icon:"⚙️", label:"הגדרות" },
+    { id:"leads",           label:"המתנה" },
+    { id:"finance",         label:"כספים" },
+    { id:"documents_bank",  label:"מסמכים" },
+    { id:"settings",        label:"הגדרות" },
   ];
 
   return (
     <aside className="sidebar">
       <div className="sidebar-logo" style={{
         background:"linear-gradient(135deg,#3730A3,#4F46E5)",
-        padding:"16px 14px",
-        display:"flex",flexDirection:"column",alignItems:"flex-start",justifyContent:"center"
+        padding:"18px 14px",
+        display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center"
       }}>
-        <div style={{fontFamily:"'Plus Jakarta Sans',sans-serif",fontSize:"1.6rem",fontWeight:800,letterSpacing:"-1px",lineHeight:1}}>
+        <div style={{fontFamily:"'DM Sans',sans-serif",fontSize:"1.8rem",fontWeight:800,letterSpacing:"-1.5px",lineHeight:1}}>
           <span style={{color:"white"}}>Clinic</span>
           <span style={{color:"#67E8F9"}}>Up</span>
         </div>
-        <div style={{display:"flex",alignItems:"center",gap:5,marginTop:5}}>
-          <span style={{fontSize:"0.75rem"}}>📅</span>
-          <span style={{fontSize:"0.68rem",color:"rgba(255,255,255,0.6)",letterSpacing:"1px"}}>clinic management</span>
+        <div style={{marginTop:5}}>
+          <span style={{fontSize:"0.68rem",color:"rgba(255,255,255,0.55)",letterSpacing:"2px",textTransform:"uppercase"}}>clinic management</span>
         </div>
       </div>
       {nav.map(n => (
@@ -2378,7 +2389,7 @@ function Sidebar({ page, setPage, leadsCount, openPatientsDrawer, onLogout }) {
           <div className={`nav-item ${(page === n.id || (n.id==="patients" && isPatientsSection) || (page==="patient_detail" && n.id==="patients")) ? "active":""}`}
             onClick={() => n.sub ? openPatientsDrawer() : setPage(n.id)}
             style={{position:"relative"}}>
-            <span className="nav-icon">{n.icon}</span>{n.label}
+            <span className="nav-icon">{navIcons[n.id]}</span>{n.label}
             {n.id === "leads" && leadsCount > 0 && (
               <span style={{
                 position:"absolute", top:6, left:8,
@@ -2389,21 +2400,14 @@ function Sidebar({ page, setPage, leadsCount, openPatientsDrawer, onLogout }) {
               }}>{leadsCount}</span>
             )}
           </div>
-          {/* Sub-tabs */}
           {n.sub && isPatientsSection && n.id === "patients" && (
             <div style={{background:"rgba(0,0,0,0.2)"}}>
               {n.sub.map(s => (
                 <div key={s.id}
                   className={`nav-item ${page === s.id || (page === "patient_detail" && s.id === "patients_list") ? "active" : ""}`}
                   onClick={() => setPage(s.id)}
-                  style={{
-                    fontSize:"0.78rem",
-                    padding:"8px 16px 8px 24px",
-                    borderRight:"2px solid transparent",
-                    paddingRight:32
-                  }}>
+                  style={{fontSize:"0.78rem",padding:"8px 16px 8px 24px",borderRight:"2px solid transparent",paddingRight:32}}>
                   <span style={{marginLeft:4,opacity:0.7}}>—</span>
-                  <span className="nav-icon" style={{fontSize:"0.85rem"}}>{s.icon}</span>
                   {s.label}
                 </div>
               ))}
@@ -2411,8 +2415,8 @@ function Sidebar({ page, setPage, leadsCount, openPatientsDrawer, onLogout }) {
           )}
         </div>
       ))}
-      <div onClick={onLogout} className="nav-item" style={{marginTop:"auto",opacity:0.7,cursor:"pointer"}}>
-        <span className="nav-icon">🚪</span>יציאה
+      <div onClick={onLogout} className="nav-item" style={{marginTop:"auto",opacity:0.6,cursor:"pointer"}}>
+        <span className="nav-icon">{navIcons.logout}</span>יציאה
       </div>
     </aside>
   );
