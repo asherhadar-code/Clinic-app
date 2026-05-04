@@ -407,7 +407,12 @@ h1,h2,h3,h4 {
     z-index: 200;
     order: 2;
   }
-  .sidebar-logo { display: none; }
+  .sidebar-logo { 
+  padding: 0;
+  margin: 0;
+  border-bottom: 1px solid rgba(255,255,255,0.1);
+  overflow: hidden;
+}display: none; }
   .nav-item {
     flex-direction: column; gap: 2px;
     padding: 6px 4px;
@@ -2351,8 +2356,8 @@ function Sidebar({ page, setPage, leadsCount, openPatientsDrawer, onLogout }) {
 
   return (
     <aside className="sidebar">
-      <div className="sidebar-logo">
-        <img src="/CLILOGO.PNG" alt="ClinicUp" style={{width:"100%",maxWidth:150}} />
+      <div className="sidebar-logo" style={{padding:0,margin:0,overflow:"hidden"}}>
+        <img src="/CLILOGO.PNG" alt="ClinicUp" style={{width:"100%",display:"block",objectFit:"cover"}} />
       </div>
       {nav.map(n => (
         <div key={n.id}>
