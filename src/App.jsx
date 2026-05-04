@@ -2358,7 +2358,7 @@ function Sidebar({ page, setPage, leadsCount, openPatientsDrawer, onLogout }) {
   return (
     <aside className="sidebar">
       <div className="sidebar-logo">
-        <img src="/CLILOGO.PNG" alt="ClinicUp" style={{width:"100%",height:"auto",display:"block"}} />
+        <img src="/CLILOGO.PNG" alt="ClinicUp" style={{width:"100%",height:"110px",objectFit:"cover",objectPosition:"center",display:"block"}} />
       </div>
       {nav.map(n => (
         <div key={n.id}>
