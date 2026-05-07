@@ -58,9 +58,8 @@ export default async function handler(req, res) {
       "שיק": 2,
       "כרטיס אשראי": 3,
       "העברה בנקאית": 4,
-      "פייפאל": 5,
-      "ביט": 6,
-      "פייבוקס": 7,
+      "ביט": 4,
+      "פייבוקס": 4,
     };
 
     const fullAmount = parseFloat(amount);
