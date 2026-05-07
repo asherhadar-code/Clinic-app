@@ -58,8 +58,9 @@ export default async function handler(req, res) {
       "שיק": 2,
       "כרטיס אשראי": 3,
       "העברה בנקאית": 4,
-      "ביט": 5,
-      "פייבוקס": 5,
+      "פייפאל": 5,
+      "ביט": 6,
+      "פייבוקס": 7,
     };
 
     const fullAmount = parseFloat(amount);
@@ -104,6 +105,9 @@ export default async function handler(req, res) {
     });
 
     const receiptData = await receiptRes.json();
+    console.log("GI Full Response:", JSON.stringify(receiptData));
+    console.log("Payment type sent:", paymentTypeMap[paymentMethod] || 1);
+    console.log("Payment method string:", paymentMethod);
     if (receiptData.errorMessage) throw new Error(receiptData.errorMessage);
 
     return res.status(200).json({
