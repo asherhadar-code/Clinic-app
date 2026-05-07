@@ -1049,20 +1049,37 @@ export default function App() {
   const [page, setPage] = useState("dashboard");
   const [pageHistory, setPageHistory] = useState([]);
 
-  const navigateTo = (newPage) => {
-    setPageHistory(prev => [...prev, page]);
-    setPage(newPage);
-  };
-
   const goBack = () => {
     if (pageHistory.length > 0) {
       const prev = pageHistory[pageHistory.length - 1];
       setPageHistory(h => h.slice(0, -1));
       setPage(prev);
+      if (prev !== "patient_detail") setSelectedPatient(null);
     } else {
       setPage("dashboard");
+      setSelectedPatient(null);
     }
   };
+
+  const navigateTo = (newPage) => {
+    setPageHistory(prev => [...prev, page]);
+    setPage(newPage);
+    // Push state to browser history for Android back button
+    window.history.pushState({ page: newPage }, "");
+  };
+
+  // Handle Android back button
+  useEffect(() => {
+    const handlePopState = (e) => {
+      goBack();
+      // Push state again so back button keeps working
+      window.history.pushState({ page }, "");
+    };
+    window.addEventListener("popstate", handlePopState);
+    // Push initial state
+    window.history.pushState({ page: "dashboard" }, "");
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, [pageHistory]);
   const [patients, setPatients] = useState([]);
   const [loading, setLoading] = useState(true);
 
