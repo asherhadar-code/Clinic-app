@@ -2728,8 +2728,16 @@ function Calendar({ patients, appointments, setAppointments, openModal, sendWhat
 
   // Get appointments for a specific date
   const getDateBlocks = (dateStr) => {
+    const dayIndex = new Date(dateStr).getDay();
     return (appointments || [])
-      .filter(a => a.date && a.date === dateStr)
+      .filter(a => {
+        // טיפולים ושעות חלון — לפי תאריך ספציפי
+        if (a.block_type !== "break") return a.date && a.date === dateStr;
+        // הפסקות קבועות — לפי יום בשבוע (ללא תאריך)
+        if (!a.date) return a.day_index === dayIndex;
+        // הפסקות ישנות עם תאריך — לפי תאריך
+        return a.date === dateStr;
+      })
       .sort((a,b) => (a.start_time||"") > (b.start_time||"") ? 1 : -1)
       .map(a => ({
         id: a.id,
@@ -2833,24 +2841,27 @@ function Calendar({ patients, appointments, setAppointments, openModal, sendWhat
       const timeline = buildTimeline(dateStr);
       const insertAfter = timeline[insertAfterIdx];
       const blockStart = insertAfter ? insertAfter.endTime : dayStart;
+      const dayIndex = new Date(dateStr).getDay();
       try {
         const newApt = await sb.addAppointment({
-          dayIndex: new Date(dateStr).getDay(),
+          dayIndex,
           startTime: blockStart,
           blockType: addType,
           minutes: addType === "break" ? breakMins : 45,
           status: addType,
-          date: dateStr,
+          // הפסקה — ללא תאריך ספציפי, לצמיתות לפי יום בשבוע
+          // שעת חלון — עם תאריך ספציפי
+          date: addType === "slot" ? dateStr : null,
         });
         if (newApt && newApt.id) {
           setAppointments(prev => [...prev, {
             ...newApt,
-            day_index: new Date(dateStr).getDay(),
+            day_index: dayIndex,
             block_type: addType,
             minutes: addType === "break" ? breakMins : 45,
             start_time: blockStart,
             status: addType,
-            date: dateStr
+            date: addType === "slot" ? dateStr : null,
           }]);
         }
       } catch(e) { console.error(e); }
