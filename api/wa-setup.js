@@ -28,7 +28,7 @@ export default async function handler(req, res) {
 
   const token = process.env.WHATSAPP_TOKEN;
   const phoneId = process.env.WHATSAPP_PHONE_NUMBER_ID || "1492392977283786";
-  const fallbackWaba = "167319694155975";
+  const fallbackWaba = "1739632388174337";
   if (!token) return res.status(500).json({ error: "WHATSAPP_TOKEN is not set in Vercel" });
 
   const report = { steps: [] };
