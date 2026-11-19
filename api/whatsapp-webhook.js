@@ -168,8 +168,7 @@ export default async function handler(req, res) {
         const value = change.value || {};
 
         // Only messages sent to our number (ignore delivery/read statuses)
-        if (value.metadata?.phone_number_id && value.metadata.phone_number_id !== PHONE_NUMBER_ID) continue;
-        if (!Array.isArray(value.messages)) continue;
+       
 
         for (const msg of value.messages) {
           const contact = (value.contacts || []).find((c) => c.wa_id === msg.from) || {};
