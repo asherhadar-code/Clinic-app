@@ -9,7 +9,7 @@
 //   GMAIL_USER                — the Gmail address that sends the emails
 //   GMAIL_APP_PASSWORD        — Gmail "App password" (not the regular password)
 //   FORWARD_EMAIL_TO          — where messages are forwarded
-//   VITE_SUPABASE_URL / VITE_SUPABASE_KEY — already used by the app (for patient name lookup)
+//   VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY — already used by the app (patient lookup + RSVP updates)
 
 import nodemailer from "nodemailer";
 
@@ -36,10 +36,45 @@ const prettyPhone = (waId) => {
   return "+" + d;
 };
 
+const sbUrl = () => process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
+const sbKey = () =>
+  process.env.VITE_SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_KEY || process.env.SUPABASE_KEY;
+
+// RSVP button from the reminder template: payload "confirm:<id>" / "cancel:<id>"
+// → update the appointment status in Supabase and return its details
+async function handleRsvp(msg) {
+  const payload = msg.type === "button" ? msg.button?.payload : msg.interactive?.button_reply?.id;
+  const m = /^(confirm|cancel):(.+)$/.exec(String(payload || ""));
+  if (!m) return null;
+
+  const action = m[1];
+  const aptId = m[2];
+  const status = action === "confirm" ? "confirmed" : "cancelled";
+  const url = sbUrl();
+  const key = sbKey();
+  const headers = { apikey: key, Authorization: `Bearer ${key}`, "Content-Type": "application/json" };
+
+  const res = await fetch(`${url}/rest/v1/appointments?id=eq.${encodeURIComponent(aptId)}`, {
+    method: "PATCH",
+    headers: { ...headers, Prefer: "return=representation" },
+    body: JSON.stringify({ status }),
+  });
+  const rows = await res.json().catch(() => []);
+  const apt = Array.isArray(rows) ? rows[0] : null;
+
+  return {
+    action,
+    updated: res.ok && Boolean(apt),
+    patientName: apt?.patient_name,
+    date: apt?.date,
+    time: String(apt?.start_time || "").slice(0, 5),
+  };
+}
+
 // Find patient in Supabase by phone (matches the last 9 digits of any field)
 async function findPatientByPhone(waId) {
-  const url = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
-  const key = process.env.VITE_SUPABASE_KEY || process.env.SUPABASE_KEY;
+  const url = sbUrl();
+  const key = sbKey();
   if (!url || !key) return null;
 
   try {
@@ -108,11 +143,11 @@ function getTransporter() {
   return transporter;
 }
 
-async function forwardByEmail({ name, phone, content, time, isKnownPatient }) {
+async function forwardByEmail({ name, phone, content, time, isKnownPatient, subject: customSubject }) {
   const to = process.env.FORWARD_EMAIL_TO;
   if (!to) throw new Error("FORWARD_EMAIL_TO is not set");
 
-  const subject = `הודעת וואטסאפ מ${name}`;
+  const subject = customSubject || `הודעת וואטסאפ מ${name}`;
   const text =
     `שם: ${name}${isKnownPatient ? "" : " (לא נמצאה ברשימת המטופלים)"}\n` +
     `טלפון: ${phone}\n` +
@@ -167,8 +202,8 @@ export default async function handler(req, res) {
       for (const change of entry.changes || []) {
         const value = change.value || {};
 
-        // Only messages sent to our number (ignore delivery/read statuses)
-              if (!Array.isArray(value.messages)) continue; 
+        // Only incoming messages (ignore delivery/read statuses)
+        if (!Array.isArray(value.messages)) continue;
 
         for (const msg of value.messages) {
           const contact = (value.contacts || []).find((c) => c.wa_id === msg.from) || {};
@@ -180,12 +215,37 @@ export default async function handler(req, res) {
                 timeZone: "Asia/Jerusalem",
               });
 
+              // Reminder buttons → update the calendar
+              let rsvp = null;
+              try {
+                rsvp = await handleRsvp(msg);
+              } catch (e) {
+                console.error("RSVP update failed:", e.message);
+              }
+
+              let content = describeMessage(msg);
+              let subject;
+              if (rsvp) {
+                const who = rsvp.patientName || name;
+                const when = rsvp.date
+                  ? `${rsvp.date.split("-").reverse().join(".")} בשעה ${rsvp.time}`
+                  : "";
+                const verb = rsvp.action === "confirm" ? "✅ אישור הגעה" : "❌ ביטול";
+                subject = `${verb}: ${who}${when ? ` (${when})` : ""}`;
+                content =
+                  `${verb} לטיפול של ${who}${when ? ` ב-${when}` : ""}.\n` +
+                  (rsvp.updated
+                    ? `היומן עודכן אוטומטית ל"${rsvp.action === "confirm" ? "אישר" : "בוטל"}".`
+                    : "⚠️ לא הצלחתי לעדכן את היומן (התור לא נמצא), צריך לעדכן ידנית.");
+              }
+
               await forwardByEmail({
                 name,
                 phone: prettyPhone(msg.from),
-                content: describeMessage(msg),
+                content,
                 time,
                 isKnownPatient: Boolean(patient),
+                subject,
               });
               console.log(`Forwarded message ${msg.id} from ${msg.from}`);
             })()
